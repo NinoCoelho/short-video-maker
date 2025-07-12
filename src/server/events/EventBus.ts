@@ -1,32 +1,32 @@
 import { EventEmitter } from 'events';
-import { logger } from '../../utils/logger';
 
+// Event type definitions
 export interface VideoStatusUpdateEvent {
   videoId: string;
   status: string;
   progress?: number;
   message?: string;
-  error?: string;
+  timestamp: string;
 }
 
 export interface VideoProcessingProgressEvent {
   videoId: string;
-  stage: string;
   progress: number;
-  total?: number;
+  stage: string;
   message?: string;
+  timestamp: string;
 }
 
 export interface VideoCompletedEvent {
   videoId: string;
-  outputPath: string;
-  duration?: number;
+  result: any;
+  timestamp: string;
 }
 
 export interface VideoErrorEvent {
   videoId: string;
   error: string;
-  stage?: string;
+  timestamp: string;
 }
 
 export interface SceneProcessingEvent {
@@ -34,90 +34,99 @@ export interface SceneProcessingEvent {
   sceneIndex: number;
   totalScenes: number;
   stage: string;
-  progress?: number;
+  progress: number;
+  timestamp: string;
 }
 
-class EventBus extends EventEmitter {
+// Event Bus class using singleton pattern
+export class EventBus extends EventEmitter {
   private static instance: EventBus;
 
   private constructor() {
     super();
-    this.setMaxListeners(0); // Unlimited listeners
+    this.setMaxListeners(100); // Increase max listeners for high-throughput scenarios
   }
 
-  static getInstance(): EventBus {
+  public static getInstance(): EventBus {
     if (!EventBus.instance) {
       EventBus.instance = new EventBus();
     }
     return EventBus.instance;
   }
 
-  // Video status updates
-  emitVideoStatusUpdate(event: VideoStatusUpdateEvent) {
-    this.emit('video:status:update', event);
+  // Video status update events
+  public emitVideoStatusUpdate(event: VideoStatusUpdateEvent): void {
+    this.emit('video:status:update', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
   }
 
-  onVideoStatusUpdate(listener: (event: VideoStatusUpdateEvent) => void) {
+  public onVideoStatusUpdate(listener: (event: VideoStatusUpdateEvent) => void): void {
     this.on('video:status:update', listener);
-    return () => this.off('video:status:update', listener);
   }
 
-  // Video processing progress
-  emitVideoProcessingProgress(event: VideoProcessingProgressEvent) {
-    this.emit('video:processing:progress', event);
+  // Video processing progress events
+  public emitVideoProcessingProgress(event: VideoProcessingProgressEvent): void {
+    this.emit('video:processing:progress', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
   }
 
-  onVideoProcessingProgress(listener: (event: VideoProcessingProgressEvent) => void) {
+  public onVideoProcessingProgress(listener: (event: VideoProcessingProgressEvent) => void): void {
     this.on('video:processing:progress', listener);
-    return () => this.off('video:processing:progress', listener);
   }
 
-  // Video completed
-  emitVideoCompleted(event: VideoCompletedEvent) {
-    this.emit('video:completed', event);
+  // Video completion events
+  public emitVideoCompleted(event: VideoCompletedEvent): void {
+    this.emit('video:completed', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
   }
 
-  onVideoCompleted(listener: (event: VideoCompletedEvent) => void) {
+  public onVideoCompleted(listener: (event: VideoCompletedEvent) => void): void {
     this.on('video:completed', listener);
-    return () => this.off('video:completed', listener);
   }
 
-  // Video error
-  emitVideoError(event: VideoErrorEvent) {
-    this.emit('video:error', event);
+  // Video error events
+  public emitVideoError(event: VideoErrorEvent): void {
+    this.emit('video:error', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
   }
 
-  onVideoError(listener: (event: VideoErrorEvent) => void) {
+  public onVideoError(listener: (event: VideoErrorEvent) => void): void {
     this.on('video:error', listener);
-    return () => this.off('video:error', listener);
   }
 
-  // Scene processing
-  emitSceneProcessing(event: SceneProcessingEvent) {
-    this.emit('scene:processing', event);
+  // Scene processing events
+  public emitSceneProcessing(event: SceneProcessingEvent): void {
+    this.emit('scene:processing', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
   }
 
-  onSceneProcessing(listener: (event: SceneProcessingEvent) => void) {
+  public onSceneProcessing(listener: (event: SceneProcessingEvent) => void): void {
     this.on('scene:processing', listener);
-    return () => this.off('scene:processing', listener);
   }
 
-  // Generic event emitters for extensibility
-  emitCustomEvent(eventName: string, data: any) {
-    this.emit(eventName, data);
-  }
-
-  onCustomEvent(eventName: string, listener: (data: any) => void) {
-    this.on(eventName, listener);
-    return () => this.off(eventName, listener);
-  }
-
-  // Cleanup
-  removeAllListenersForVideo(videoId: string) {
-    // This is a pattern-based cleanup - remove all listeners that might be video-specific
-    // In practice, you might want to track listeners per video ID
-    logger.debug(`Cleaning up listeners for video ${videoId}`);
+  // Generic event methods
+  public removeAllListenersForVideo(videoId: string): void {
+    // Remove all listeners for a specific video
+    const events = ['video:status:update', 'video:processing:progress', 'video:completed', 'video:error', 'scene:processing'];
+    events.forEach(eventName => {
+      const listeners = this.listeners(eventName);
+      listeners.forEach(listener => {
+        // Note: This is a simple implementation. In practice, you might want to track listeners by videoId
+        // For now, we'll rely on the WebSocket server to manage subscriptions
+      });
+    });
   }
 }
 
+// Export singleton instance
 export const eventBus = EventBus.getInstance();

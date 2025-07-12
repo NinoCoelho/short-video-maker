@@ -1,317 +1,407 @@
 # WebSocket API Documentation
 
-This document describes the WebSocket API for real-time communication in the Short Video Maker application.
+## Overview
 
-## Connection
+The Short Video Maker WebSocket API provides real-time communication for video processing updates, eliminating the need for polling and providing instant feedback on video creation progress.
 
-The WebSocket server is available at the same host and port as the main HTTP server.
+## Connection Details
 
+### Endpoint
+- **WebSocket URL**: `ws://localhost:3123` (development)
+- **Production**: `wss://your-domain.com`
+
+### Supported Transports
+- WebSocket (primary)
+- Polling (fallback)
+
+### Connection Options
 ```javascript
-const socket = io(window.location.origin);
+const socket = io('ws://localhost:3123', {
+  transports: ['websocket', 'polling'],
+  upgrade: true,
+  rememberUpgrade: true
+});
 ```
+
+## Authentication
+
+Currently, no authentication is required for WebSocket connections. Future versions may implement token-based authentication.
 
 ## Connection Events
 
-### Client to Server
-
-#### `ping`
-Health check ping to verify connection status.
-```javascript
-socket.emit('ping');
-```
+### Client → Server Events
 
 #### `subscribe:video`
 Subscribe to updates for a specific video.
+
+**Payload:**
 ```javascript
 socket.emit('subscribe:video', videoId);
 ```
 
+**Parameters:**
+- `videoId` (string): The unique identifier of the video
+
+**Response:**
+```javascript
+socket.on('subscribed:video', (data) => {
+  console.log('Subscribed to video:', data.videoId);
+});
+```
+
 #### `unsubscribe:video`
 Unsubscribe from updates for a specific video.
+
+**Payload:**
 ```javascript
 socket.emit('unsubscribe:video', videoId);
 ```
 
+**Response:**
+```javascript
+socket.on('unsubscribed:video', (data) => {
+  console.log('Unsubscribed from video:', data.videoId);
+});
+```
+
 #### `subscribe:all`
-Subscribe to all video updates (useful for list views).
+Subscribe to updates for all videos (useful for list views).
+
+**Payload:**
 ```javascript
 socket.emit('subscribe:all');
 ```
 
-#### `unsubscribe:all`
-Unsubscribe from all video updates.
-```javascript
-socket.emit('unsubscribe:all');
-```
-
-### Server to Client
-
-#### `connect`
-Emitted when the client successfully connects to the server.
-```javascript
-socket.on('connect', () => {
-  console.log('Connected to WebSocket server');
-});
-```
-
-#### `disconnect`
-Emitted when the client disconnects from the server.
-```javascript
-socket.on('disconnect', () => {
-  console.log('Disconnected from WebSocket server');
-});
-```
-
-#### `pong`
-Response to ping for health check.
-```javascript
-socket.on('pong', () => {
-  console.log('Server is alive');
-});
-```
-
-#### `subscribed:video`
-Confirmation of video subscription.
-```javascript
-socket.on('subscribed:video', ({ videoId }) => {
-  console.log(`Subscribed to video ${videoId}`);
-});
-```
-
-#### `unsubscribed:video`
-Confirmation of video unsubscription.
-```javascript
-socket.on('unsubscribed:video', ({ videoId }) => {
-  console.log(`Unsubscribed from video ${videoId}`);
-});
-```
-
-#### `subscribed:all`
-Confirmation of global subscription.
+**Response:**
 ```javascript
 socket.on('subscribed:all', () => {
   console.log('Subscribed to all video updates');
 });
 ```
 
-#### `unsubscribed:all`
-Confirmation of global unsubscription.
+#### `unsubscribe:all`
+Unsubscribe from all video updates.
+
+**Payload:**
+```javascript
+socket.emit('unsubscribe:all');
+```
+
+**Response:**
 ```javascript
 socket.on('unsubscribed:all', () => {
   console.log('Unsubscribed from all video updates');
 });
 ```
 
-## Video Status Events
+#### `ping`
+Health check ping.
 
-### `video:status:update`
+**Payload:**
+```javascript
+socket.emit('ping');
+```
+
+**Response:**
+```javascript
+socket.on('pong', () => {
+  console.log('Server is responsive');
+});
+```
+
+### Server → Client Events
+
+#### `video:status:update`
 Emitted when a video's status changes.
 
-**Payload:**
-```typescript
-interface VideoStatusUpdate {
-  videoId: string;
-  status: 'pending' | 'processing' | 'ready' | 'failed';
-  progress?: number;      // 0-100
-  message?: string;       // Human-readable status message
+**Event Data:**
+```javascript
+{
+  videoId: "abc123xyz",
+  status: "processing",
+  progress: 45,
+  message: "Processing audio for scene 1",
+  timestamp: "2025-01-12T10:30:00Z"
 }
 ```
 
-**Example:**
+**Status Values:**
+- `pending`: Video is queued for processing
+- `processing`: Video is being processed
+- `ready`: Video processing completed successfully
+- `failed`: Video processing failed
+
+#### `video:processing:progress`
+Emitted during video processing with progress updates.
+
+**Event Data:**
 ```javascript
-socket.on('video:status:update', (update) => {
-  console.log(`Video ${update.videoId} status: ${update.status}`);
-  if (update.progress !== undefined) {
-    console.log(`Progress: ${update.progress}%`);
-  }
-});
-```
-
-### `video:processing:progress`
-Emitted during video processing with detailed progress information.
-
-**Payload:**
-```typescript
-interface VideoProcessingProgress {
-  videoId: string;
-  stage: string;          // Current processing stage
-  progress: number;       // 0-100
-  total?: number;         // Total items to process (optional)
-  message?: string;       // Additional progress details
+{
+  videoId: "abc123xyz",
+  progress: 75,
+  stage: "Rendering video frames",
+  message: "Rendering video frames (75%)",
+  timestamp: "2025-01-12T10:32:00Z"
 }
 ```
 
-**Example:**
+#### `video:completed`
+Emitted when video processing completes successfully.
+
+**Event Data:**
 ```javascript
-socket.on('video:processing:progress', (progress) => {
-  console.log(`Video ${progress.videoId}: ${progress.stage} - ${progress.progress}%`);
-});
-```
-
-### `scene:processing`
-Emitted when processing individual scenes within a video.
-
-**Payload:**
-```typescript
-interface SceneProcessing {
-  videoId: string;
-  sceneIndex: number;     // Current scene being processed (0-based)
-  totalScenes: number;    // Total number of scenes
-  stage: string;          // Current processing stage for this scene
-  progress?: number;      // Optional progress within the scene
+{
+  videoId: "abc123xyz",
+  result: {
+    // Video processing result data
+    outputPath: "/videos/abc123xyz.mp4",
+    duration: 30.5,
+    scenes: [...]
+  },
+  timestamp: "2025-01-12T10:35:00Z"
 }
 ```
 
-**Example:**
+#### `video:error`
+Emitted when video processing encounters an error.
+
+**Event Data:**
 ```javascript
-socket.on('scene:processing', (sceneProgress) => {
-  console.log(`Video ${sceneProgress.videoId}: Processing scene ${sceneProgress.sceneIndex + 1}/${sceneProgress.totalScenes}`);
-  console.log(`Stage: ${sceneProgress.stage}`);
-});
-```
-
-### `video:completed`
-Emitted when a video has been successfully processed and is ready.
-
-**Payload:**
-```typescript
-interface VideoCompleted {
-  videoId: string;
-  outputPath: string;     // Path to the completed video file
-  duration?: number;      // Video duration in seconds (optional)
+{
+  videoId: "abc123xyz",
+  error: "Failed to process scene 2: Audio generation timeout",
+  timestamp: "2025-01-12T10:33:00Z"
 }
 ```
 
-**Example:**
+#### `scene:processing`
+Emitted during individual scene processing.
+
+**Event Data:**
 ```javascript
-socket.on('video:completed', (completion) => {
-  console.log(`Video ${completion.videoId} completed! Available at: ${completion.outputPath}`);
-});
-```
-
-### `video:error`
-Emitted when a video processing error occurs.
-
-**Payload:**
-```typescript
-interface VideoError {
-  videoId: string;
-  error: string;          // Error message
-  stage?: string;         // Stage where the error occurred (optional)
+{
+  videoId: "abc123xyz",
+  sceneIndex: 1,
+  totalScenes: 3,
+  stage: "Finding videos for scene",
+  progress: 35,
+  timestamp: "2025-01-12T10:31:00Z"
 }
 ```
 
-**Example:**
-```javascript
-socket.on('video:error', (error) => {
-  console.error(`Video ${error.videoId} failed: ${error.error}`);
-  if (error.stage) {
-    console.error(`Failed during: ${error.stage}`);
-  }
-});
-```
+## Usage Examples
 
-## Usage Patterns
-
-### Single Video Monitoring
-Use this pattern when displaying a single video's details page:
+### React Hook Integration
 
 ```javascript
-const { useVideoStatus } = require('./hooks/useVideoStatus');
+import { useVideoStatus } from '../hooks/useVideoStatus';
 
-function VideoDetailsPage({ videoId }) {
-  const { status, isConnected } = useVideoStatus(videoId);
+function VideoList() {
+  const { status, isConnected, subscribeToAll } = useVideoStatus();
+  
+  useEffect(() => {
+    if (isConnected) {
+      subscribeToAll();
+    }
+  }, [isConnected]);
+  
+  useEffect(() => {
+    if (status) {
+      console.log('Video update:', status);
+      // Update UI based on status
+    }
+  }, [status]);
   
   return (
     <div>
-      <h1>Video {videoId}</h1>
-      <p>Status: {status?.status}</p>
-      <p>Progress: {status?.progress}%</p>
-      <p>Connection: {isConnected ? 'Connected' : 'Disconnected'}</p>
+      Connection: {isConnected ? 'Connected' : 'Disconnected'}
+      {status && (
+        <div>
+          Video {status.id}: {status.status} ({status.progress}%)
+        </div>
+      )}
     </div>
   );
 }
 ```
 
-### Video List Monitoring
-Use this pattern when displaying a list of videos:
+### Direct Socket.IO Usage
 
 ```javascript
-const { useVideoStatus } = require('./hooks/useVideoStatus');
+import { io } from 'socket.io-client';
 
-function VideoListPage() {
-  const { status, isConnected } = useVideoStatus(); // No specific videoId
+const socket = io('ws://localhost:3123');
+
+// Connection events
+socket.on('connect', () => {
+  console.log('Connected to WebSocket server');
   
-  // Listen for all video updates and update your list accordingly
+  // Subscribe to all videos
+  socket.emit('subscribe:all');
+});
+
+socket.on('disconnect', () => {
+  console.log('Disconnected from WebSocket server');
+});
+
+// Video events
+socket.on('video:status:update', (data) => {
+  console.log('Video status update:', data);
+  updateVideoInUI(data.videoId, data.status, data.progress);
+});
+
+socket.on('video:processing:progress', (data) => {
+  console.log('Processing progress:', data);
+  updateProgressBar(data.videoId, data.progress, data.stage);
+});
+
+socket.on('video:completed', (data) => {
+  console.log('Video completed:', data);
+  markVideoAsComplete(data.videoId);
+});
+
+socket.on('video:error', (data) => {
+  console.log('Video error:', data);
+  showErrorMessage(data.videoId, data.error);
+});
+
+socket.on('scene:processing', (data) => {
+  console.log('Scene processing:', data);
+  updateSceneProgress(data.videoId, data.sceneIndex, data.stage);
+});
+```
+
+### Node.js Client Example
+
+```javascript
+const { io } = require('socket.io-client');
+
+const socket = io('ws://localhost:3123');
+
+socket.on('connect', () => {
+  console.log('Connected to video processing server');
   
-  return (
-    <div>
-      <h1>All Videos</h1>
-      <p>Real-time updates: {isConnected ? 'ON' : 'OFF'}</p>
-      {/* Render video list */}
-    </div>
-  );
-}
+  // Subscribe to specific video
+  socket.emit('subscribe:video', 'video-abc123');
+});
+
+socket.on('video:status:update', (data) => {
+  console.log(`Video ${data.videoId} status: ${data.status}`);
+  if (data.progress) {
+    console.log(`Progress: ${data.progress}%`);
+  }
+});
+
+socket.on('video:completed', (data) => {
+  console.log(`Video ${data.videoId} processing completed!`);
+  process.exit(0);
+});
+
+socket.on('video:error', (data) => {
+  console.error(`Video ${data.videoId} failed: ${data.error}`);
+  process.exit(1);
+});
 ```
 
 ## Error Handling
 
-The WebSocket connection includes automatic reconnection logic. If the connection is lost:
-
-1. The client will attempt to reconnect automatically
-2. The UI should fall back to HTTP polling
-3. Once reconnected, real-time updates will resume
+### Connection Errors
 
 ```javascript
 socket.on('connect_error', (error) => {
-  console.error('WebSocket connection error:', error);
-  // Implement fallback logic here
+  console.error('Connection failed:', error);
+  // Implement retry logic or fallback to HTTP polling
+});
+```
+
+### Reconnection Logic
+
+```javascript
+socket.on('disconnect', (reason) => {
+  if (reason === 'io server disconnect') {
+    // Server initiated disconnect, don't auto-reconnect
+    console.log('Server disconnected the client');
+  } else {
+    // Network issue, will auto-reconnect
+    console.log('Connection lost, attempting to reconnect...');
+  }
 });
 
 socket.on('reconnect', (attemptNumber) => {
   console.log(`Reconnected after ${attemptNumber} attempts`);
-  // Re-subscribe to necessary channels
 });
 ```
 
-## Connection Lifecycle
+## Best Practices
 
-1. **Initial Connection**: Client connects and receives `connect` event
-2. **Subscription**: Client subscribes to specific videos or all updates
-3. **Real-time Updates**: Server sends relevant events based on subscriptions
-4. **Disconnection**: Connection lost, client attempts automatic reconnection
-5. **Reconnection**: Upon successful reconnection, client should re-subscribe
+### 1. Subscription Management
+- Subscribe to specific videos when viewing individual video details
+- Subscribe to all videos when viewing video lists
+- Always unsubscribe when components unmount
 
-## Performance Considerations
+### 2. Error Handling
+- Implement fallback to HTTP polling when WebSocket connection fails
+- Handle network interruptions gracefully
+- Show connection status to users
 
-- The server automatically manages subscriptions and only sends relevant updates
-- Connections are cleaned up automatically when clients disconnect
-- The server uses rooms to efficiently broadcast to relevant subscribers only
-- Ping/pong mechanism ensures connection health and enables quick failure detection
+### 3. Performance
+- Throttle rapid updates to prevent UI flickering
+- Use WebSocket for real-time updates, HTTP for initial data loading
+- Implement proper cleanup in React components
 
-## Security
-
-- WebSocket connections inherit the same CORS policies as the HTTP server
-- In production, connections are restricted to the same origin
-- In development, localhost connections are allowed for testing
-
-## Testing
-
-You can test the WebSocket API using the browser's developer console:
-
+### 4. Development vs Production
 ```javascript
-// Connect
-const socket = io();
-
-// Subscribe to a video
-socket.emit('subscribe:video', 'your-video-id');
-
-// Listen for updates
-socket.on('video:status:update', console.log);
-socket.on('video:processing:progress', console.log);
-socket.on('scene:processing', console.log);
-
-// Health check
-socket.emit('ping');
-socket.on('pong', () => console.log('Server responded to ping'));
+const socketUrl = process.env.NODE_ENV === 'production' 
+  ? 'wss://your-domain.com' 
+  : 'ws://localhost:3123';
 ```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Connection Refused
+- Ensure the server is running on the correct port
+- Check firewall settings
+- Verify CORS configuration
+
+#### Events Not Received
+- Confirm subscription to the correct video ID
+- Check server logs for event emission
+- Verify client event listeners are registered
+
+#### Performance Issues
+- Monitor the number of concurrent connections
+- Implement proper event throttling
+- Use rooms for targeted broadcasting
+
+### Debug Mode
+
+Enable debug logging in the browser:
+```javascript
+localStorage.setItem('debug', 'socket.io-client:*');
+```
+
+## Rate Limiting
+
+WebSocket connections are subject to the same rate limiting as HTTP requests:
+- 100 requests per minute per IP
+- Connection limits may apply
+
+## Security Considerations
+
+- WebSocket connections inherit CORS policies
+- Future versions will implement authentication
+- SSL/TLS encryption in production environments
+
+## Version Compatibility
+
+- Client version: socket.io-client ^4.8.1
+- Server version: socket.io ^4.8.1
+- Protocol version: 4
+
+---
+
+**Last Updated**: January 12, 2025  
+**Version**: 1.0  
+**Protocol**: Socket.IO v4

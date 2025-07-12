@@ -1,171 +1,199 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useWebSocket } from './useWebSocket';
-import type { VideoStatusObject } from '../../short-creator/VideoStatusManager';
+import { logger } from '../../utils/browser-logger';
 
-interface VideoStatusUpdate {
-  videoId: string;
+export interface VideoStatus {
+  id: string;
   status: string;
   progress?: number;
   message?: string;
   error?: string;
+  stage?: string;
+  lastUpdate: string;
 }
 
-interface VideoProcessingProgress {
-  videoId: string;
-  stage: string;
-  progress: number;
-  total?: number;
-  message?: string;
+export interface VideoStatusHook {
+  status: VideoStatus | null;
+  isConnected: boolean;
+  error: string | null;
+  subscribe: (videoId: string) => void;
+  unsubscribe: (videoId: string) => void;
+  subscribeToAll: () => void;
+  unsubscribeFromAll: () => void;
 }
 
-interface SceneProcessing {
-  videoId: string;
-  sceneIndex: number;
-  totalScenes: number;
-  stage: string;
-  progress?: number;
-}
-
-export function useVideoStatus(videoId?: string) {
-  const { emit, on, off, isConnected } = useWebSocket();
-  const [status, setStatus] = useState<VideoStatusObject | null>(null);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+export function useVideoStatus(videoId?: string): VideoStatusHook {
+  const { socket, isConnected, error: wsError, emit } = useWebSocket();
+  const [status, setStatus] = useState<VideoStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Subscribe to a specific video
-  const subscribeToVideo = useCallback((id: string) => {
-    if (isConnected && id) {
-      emit('subscribe:video', id);
-      setIsSubscribed(true);
+  const subscribe = useCallback((id: string) => {
+    if (emit('subscribe:video', id)) {
+      logger.info(`Subscribed to video updates: ${id}`);
     }
-  }, [emit, isConnected]);
+  }, [emit]);
 
   // Unsubscribe from a specific video
-  const unsubscribeFromVideo = useCallback((id: string) => {
-    if (isConnected && id) {
-      emit('unsubscribe:video', id);
-      setIsSubscribed(false);
+  const unsubscribe = useCallback((id: string) => {
+    if (emit('unsubscribe:video', id)) {
+      logger.info(`Unsubscribed from video updates: ${id}`);
     }
-  }, [emit, isConnected]);
+  }, [emit]);
 
   // Subscribe to all videos (for list views)
   const subscribeToAll = useCallback(() => {
-    if (isConnected) {
-      emit('subscribe:all');
-      setIsSubscribed(true);
+    if (emit('subscribe:all')) {
+      logger.info('Subscribed to all video updates');
     }
-  }, [emit, isConnected]);
+  }, [emit]);
 
   // Unsubscribe from all videos
   const unsubscribeFromAll = useCallback(() => {
-    if (isConnected) {
-      emit('unsubscribe:all');
-      setIsSubscribed(false);
+    if (emit('unsubscribe:all')) {
+      logger.info('Unsubscribed from all video updates');
     }
-  }, [emit, isConnected]);
+  }, [emit]);
 
+  // Set up socket event listeners
   useEffect(() => {
-    // Status update handler
-    const handleStatusUpdate = (update: VideoStatusUpdate) => {
-      if (!videoId || update.videoId === videoId) {
+    if (!socket) return;
+
+    // Video status update handler
+    const handleVideoStatusUpdate = (event: any) => {
+      logger.debug('Video status update received:', event);
+      
+      // Only update if this is for the video we're tracking or if we're tracking all
+      if (!videoId || event.videoId === videoId) {
+        setStatus({
+          id: event.videoId,
+          status: event.status,
+          progress: event.progress,
+          message: event.message,
+          stage: event.stage,
+          lastUpdate: event.timestamp || new Date().toISOString()
+        });
+      }
+    };
+
+    // Video processing progress handler
+    const handleVideoProgress = (event: any) => {
+      logger.debug('Video progress update received:', event);
+      
+      if (!videoId || event.videoId === videoId) {
         setStatus(prev => ({
-          ...prev,
-          status: update.status as any,
-          message: update.message,
-          error: update.error,
-          progress: update.progress
+          id: event.videoId,
+          status: prev?.status || 'processing',
+          progress: event.progress,
+          message: event.message,
+          stage: event.stage,
+          lastUpdate: event.timestamp || new Date().toISOString()
         }));
       }
     };
 
-    // Progress update handler
-    const handleProgressUpdate = (update: VideoProcessingProgress) => {
-      if (!videoId || update.videoId === videoId) {
+    // Video completion handler
+    const handleVideoCompleted = (event: any) => {
+      logger.debug('Video completed event received:', event);
+      
+      if (!videoId || event.videoId === videoId) {
         setStatus(prev => ({
-          ...prev,
-          progress: update.progress,
-          stage: update.stage,
-          message: update.message
-        }));
-      }
-    };
-
-    // Scene processing handler
-    const handleSceneProcessing = (update: SceneProcessing) => {
-      if (!videoId || update.videoId === videoId) {
-        const sceneProgress = ((update.sceneIndex + 1) / update.totalScenes) * 100;
-        setStatus(prev => ({
-          ...prev,
-          stage: `Processing scene ${update.sceneIndex + 1}/${update.totalScenes}: ${update.stage}`,
-          progress: update.progress ?? sceneProgress
-        }));
-      }
-    };
-
-    // Video completed handler
-    const handleVideoCompleted = (data: { videoId: string; outputPath: string }) => {
-      if (!videoId || data.videoId === videoId) {
-        setStatus(prev => ({
-          ...prev,
-          status: 'ready',
+          id: event.videoId,
+          status: 'completed',
           progress: 100,
-          completedAt: new Date().toISOString()
+          message: 'Video processing completed',
+          stage: 'Completed',
+          lastUpdate: event.timestamp || new Date().toISOString()
         }));
       }
     };
 
     // Video error handler
-    const handleVideoError = (data: { videoId: string; error: string; stage?: string }) => {
-      if (!videoId || data.videoId === videoId) {
+    const handleVideoError = (event: any) => {
+      logger.error('Video error event received:', event);
+      
+      if (!videoId || event.videoId === videoId) {
         setStatus(prev => ({
-          ...prev,
+          id: event.videoId,
           status: 'failed',
-          error: data.error,
-          stage: data.stage,
-          completedAt: new Date().toISOString()
+          progress: prev?.progress,
+          message: event.error,
+          error: event.error,
+          stage: 'Failed',
+          lastUpdate: event.timestamp || new Date().toISOString()
         }));
       }
     };
 
-    // Set up event listeners
-    on('video:status:update', handleStatusUpdate);
-    on('video:processing:progress', handleProgressUpdate);
-    on('scene:processing', handleSceneProcessing);
-    on('video:completed', handleVideoCompleted);
-    on('video:error', handleVideoError);
-
-    // Subscribe to updates
-    if (isConnected) {
-      if (videoId) {
-        subscribeToVideo(videoId);
-      } else {
-        subscribeToAll();
+    // Scene processing handler
+    const handleSceneProcessing = (event: any) => {
+      logger.debug('Scene processing event received:', event);
+      
+      if (!videoId || event.videoId === videoId) {
+        setStatus(prev => ({
+          id: event.videoId,
+          status: 'processing',
+          progress: event.progress,
+          message: `Processing scene ${event.sceneIndex + 1}/${event.totalScenes}`,
+          stage: event.stage,
+          lastUpdate: event.timestamp || new Date().toISOString()
+        }));
       }
-    }
+    };
+
+    // Subscription confirmation handlers
+    const handleSubscribedVideo = (data: any) => {
+      logger.info(`Confirmed subscription to video: ${data.videoId}`);
+    };
+
+    const handleSubscribedAll = () => {
+      logger.info('Confirmed subscription to all videos');
+    };
+
+    // Register event listeners
+    socket.on('video:status:update', handleVideoStatusUpdate);
+    socket.on('video:processing:progress', handleVideoProgress);
+    socket.on('video:completed', handleVideoCompleted);
+    socket.on('video:error', handleVideoError);
+    socket.on('scene:processing', handleSceneProcessing);
+    socket.on('subscribed:video', handleSubscribedVideo);
+    socket.on('subscribed:all', handleSubscribedAll);
 
     // Cleanup
     return () => {
-      off('video:status:update', handleStatusUpdate);
-      off('video:processing:progress', handleProgressUpdate);
-      off('scene:processing', handleSceneProcessing);
-      off('video:completed', handleVideoCompleted);
-      off('video:error', handleVideoError);
-
-      if (isConnected) {
-        if (videoId) {
-          unsubscribeFromVideo(videoId);
-        } else {
-          unsubscribeFromAll();
-        }
-      }
+      socket.off('video:status:update', handleVideoStatusUpdate);
+      socket.off('video:processing:progress', handleVideoProgress);
+      socket.off('video:completed', handleVideoCompleted);
+      socket.off('video:error', handleVideoError);
+      socket.off('scene:processing', handleSceneProcessing);
+      socket.off('subscribed:video', handleSubscribedVideo);
+      socket.off('subscribed:all', handleSubscribedAll);
     };
-  }, [videoId, isConnected, on, off, subscribeToVideo, unsubscribeFromVideo, subscribeToAll, unsubscribeFromAll]);
+  }, [socket, videoId]);
+
+  // Auto-subscribe to specific video if provided
+  useEffect(() => {
+    if (isConnected && videoId) {
+      subscribe(videoId);
+      
+      // Cleanup subscription on unmount or video change
+      return () => {
+        unsubscribe(videoId);
+      };
+    }
+  }, [isConnected, videoId, subscribe, unsubscribe]);
+
+  // Update error state from WebSocket error
+  useEffect(() => {
+    setError(wsError);
+  }, [wsError]);
 
   return {
     status,
     isConnected,
-    isSubscribed,
-    subscribeToVideo,
-    unsubscribeFromVideo,
+    error,
+    subscribe,
+    unsubscribe,
     subscribeToAll,
     unsubscribeFromAll
   };

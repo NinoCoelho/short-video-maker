@@ -1,7 +1,7 @@
 import { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { eventBus } from '../events/EventBus';
-import { logger } from '../../utils/logger';
+import { logger } from '../../logger';
 import type { 
   VideoStatusUpdateEvent, 
   VideoProcessingProgressEvent, 
