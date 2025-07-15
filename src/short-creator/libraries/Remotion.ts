@@ -254,6 +254,9 @@ export class Remotion {
           ignoreCertificateErrors: true
         },
         timeoutInMilliseconds: 1800000, // 30 minutos para o processo todo
+        envVariables: {
+          PORT: String(this.config.port),
+        },
         onProgress: ({ progress, renderedFrames, encodedFrames, encodedDoneIn, renderedDoneIn }) => {
           // Calcular estágio mais preciso baseado nos dados do Remotion
           let stage = "Initializing";
@@ -352,7 +355,10 @@ export class Remotion {
           disableWebSecurity: true,
           ignoreCertificateErrors: true
         },
-        timeoutInMilliseconds: 1800000 // 30 minutos para o processo todo
+        timeoutInMilliseconds: 1800000, // 30 minutos para o processo todo
+        envVariables: {
+          PORT: String(this.config.port),
+        }
       });
       
       logger.debug(
@@ -387,6 +393,9 @@ export class Remotion {
       },
       concurrency: 1, // Forçar processamento sequencial
       offthreadVideoCacheSizeInBytes: this.config.videoCacheSizeInBytes,
+      envVariables: {
+        PORT: String(this.config.port),
+      }
     });
   }
 }

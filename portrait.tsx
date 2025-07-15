@@ -16,6 +16,7 @@ import {
   createCaptionPages,
   shortVideoSchema,
 } from "../utils";
+import { getOverlayUrl } from "./src/remotion/getOverlayUrl";
 
 // Use local font instead of Google Fonts
 const fontFamily = "'BenzGrotesk', sans-serif";
@@ -95,7 +96,7 @@ export const PortraitVideo: React.FC<z.infer<typeof shortVideoSchema>> = ({
 
       {config?.overlay && (
         <Img
-          src={`http://localhost:3123/api/overlays/${config.overlay}.png`}
+          src={getOverlayUrl(config.overlay, 'remotion')}
           style={{
             position: "absolute",
             top: 0,

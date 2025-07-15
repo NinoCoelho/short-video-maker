@@ -90,7 +90,7 @@ export class Server {
   }
 
   public async start(): Promise<void> {
-    const port = Number(process.env.PORT) || 3123;
+    const port = Number(process.env.PORT) || 3233;
     
     await this.cancelOngoingRenders();
 

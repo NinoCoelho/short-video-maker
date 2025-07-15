@@ -249,12 +249,12 @@ export function resolveUrl(path: string, context: 'browser' | 'remotion' | 'serv
     case 'remotion':
       // In Remotion context, we need absolute URLs
       // Try to get port from environment or use default
-      const remotionPort = process.env.PORT || process.env.REMOTION_SERVE_PORT || '3123';
+      const remotionPort = process.env.PORT || process.env.REMOTION_SERVE_PORT || '3233';
       return `http://localhost:${remotionPort}${normalizedPath}`;
     
     case 'server':
       // In server context, use configured port
-      const serverPort = process.env.PORT || '3123';
+      const serverPort = process.env.PORT || '3233';
       return `http://localhost:${serverPort}${normalizedPath}`;
     
     default:

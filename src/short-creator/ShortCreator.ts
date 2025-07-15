@@ -602,6 +602,7 @@ export class ShortCreator {
       config: {
         ...config,
         durationMs: totalDuration * 1000,
+        port: this.globalConfig.port,
       },
     };
 
@@ -725,6 +726,7 @@ export class ShortCreator {
       config: {
         ...config,
         durationMs: totalDuration * 1000,
+        port: this.globalConfig.port,
       },
     };
 
