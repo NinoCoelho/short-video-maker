@@ -18,7 +18,7 @@ import { VideoSearch } from "./libraries/VideoSearch";
 import { ThreadPool } from './libraries/ThreadPool';
 import { VideoProcessor } from './libraries/VideoProcessor';
 import { cleanSceneText, splitTextByPunctuation } from "./utils/textCleaner";
-import { LocalImageAPI } from "./libraries/LocalImageAPI";
+import { VideoProviderFacade } from "./libraries/VideoProviderFacade";
 import { VideoStatus, VideoStatusManager, VideoStatusObject } from "./VideoStatusManager";
 import { QueueItem } from "./types/QueueItem";
 import { VideoCacheManager } from "./libraries/VideoCacheManager";
@@ -27,6 +27,7 @@ export class ShortCreator {
   private bundled: string;
   private globalConfig: Config;
   private videoSearch: VideoSearch;
+  private videoProviderFacade: VideoProviderFacade;
   private localTTS: LocalTTS;
   private remotion: Remotion;
   private statusManager: VideoStatusManager;
@@ -53,7 +54,7 @@ export class ShortCreator {
     globalConfig: Config,
     remotion: Remotion,
     ffmpeg: FFMpeg,
-    localImageApi: LocalImageAPI,
+    videoProviderFacade: VideoProviderFacade,
     localTTS: LocalTTS,
     statusManager: VideoStatusManager
   ) {
@@ -63,7 +64,8 @@ export class ShortCreator {
     this.ffmpeg = ffmpeg;
     this.localTTS = localTTS;
     this.statusManager = statusManager;
-    this.videoSearch = new VideoSearch(localImageApi);
+    this.videoProviderFacade = videoProviderFacade;
+    this.videoSearch = new VideoSearch(videoProviderFacade);
     this.musicManager = new MusicManager(globalConfig);
     this.outputDir = path.join(this.globalConfig.dataDirPath, "temp");
     fs.ensureDirSync(this.outputDir);
@@ -162,24 +164,31 @@ export class ShortCreator {
         
         // Processar URLs de vídeo nas cenas
         if (scene.videos) {
-          scene.videos = scene.videos.map((videoUrl: string, videoIndex: number) => {
-            if (!videoUrl) {
-              logger.error({ sceneIndex, videoIndex }, "Empty video URL during preprocessing");
-              throw new Error(`Empty video URL for scene ${sceneIndex}, video ${videoIndex}`);
-            }
-            
-            if (!videoUrl.startsWith('http') && videoUrl.startsWith('/')) {
-              const processedUrl = this.resolveUrlForRemotionContext(videoUrl);
-              logger.debug({ 
-                sceneIndex,
-                videoIndex,
-                originalUrl: videoUrl, 
-                processedUrl 
-              }, "Preprocessed video URL for Remotion");
-              return processedUrl;
-            }
-            return videoUrl;
-          });
+          // Filter out null/undefined values first
+          scene.videos = scene.videos.filter((videoUrl: string) => videoUrl !== null && videoUrl !== undefined);
+          
+          if (scene.videos.length === 0) {
+            logger.warn({ sceneIndex }, "Scene has no valid videos after filtering nulls");
+          } else {
+            scene.videos = scene.videos.map((videoUrl: string, videoIndex: number) => {
+              if (!videoUrl) {
+                logger.error({ sceneIndex, videoIndex }, "Empty video URL during preprocessing");
+                throw new Error(`Empty video URL for scene ${sceneIndex}, video ${videoIndex}`);
+              }
+              
+              if (!videoUrl.startsWith('http') && videoUrl.startsWith('/')) {
+                const processedUrl = this.resolveUrlForRemotionContext(videoUrl);
+                logger.debug({ 
+                  sceneIndex,
+                  videoIndex,
+                  originalUrl: videoUrl, 
+                  processedUrl 
+                }, "Preprocessed video URL for Remotion");
+                return processedUrl;
+              }
+              return videoUrl;
+            });
+          }
         } else {
           logger.warn({ sceneIndex }, "Scene missing videos during preprocessing");
         }
@@ -397,14 +406,19 @@ export class ShortCreator {
               10,
               excludeVideoIds,
               orientation,
-              missingCount
+              missingCount,
+              videoId
             );
             
             // Combina vídeos válidos com os de substituição
             finalVideos = [...validVideos, ...replacementVideos];
             
-            // Atualiza as URLs dos vídeos na cena
-            scene.videos = finalVideos.map(v => v.url);
+            // Atualiza as URLs dos vídeos na cena, filtrando URLs vazias
+            const validVideosForScene = finalVideos.filter(v => v && v.url);
+            if (validVideosForScene.length === 0) {
+              throw new Error(`No valid videos found for scene ${inputScenes.indexOf(originalScene)} after filtering. Original count: ${finalVideos.length}`);
+            }
+            scene.videos = validVideosForScene.map(v => v.url);
             finalVideos.forEach(video => video && excludeVideoIds.push(video.id));
           } else {
             // Todos os vídeos foram encontrados
@@ -424,9 +438,14 @@ export class ShortCreator {
             10,
             excludeVideoIds,
             orientation,
-            this.processTextForTTS(scene.text).length
+            this.processTextForTTS(scene.text).length,
+            videoId
           );
-          scene.videos = finalVideos.map(v => v.url);
+          const validVideosForScene = finalVideos.filter(v => v && v.url);
+          if (validVideosForScene.length === 0) {
+            throw new Error(`No valid videos found for scene ${inputScenes.indexOf(originalScene)} after filtering. Original count: ${finalVideos.length}`);
+          }
+          scene.videos = validVideosForScene.map(v => v.url);
           finalVideos.forEach(video => video && excludeVideoIds.push(video.id));
         }
       } else {
@@ -439,8 +458,13 @@ export class ShortCreator {
           excludeVideoIds,
           orientation,
           this.processTextForTTS(scene.text).length,
+          videoId
         );
-        scene.videos = finalVideos.map(v => v.url);
+        const validVideosForScene = finalVideos.filter(v => v && v.url);
+        if (validVideosForScene.length === 0) {
+          throw new Error(`No valid videos found for scene ${inputScenes.indexOf(originalScene)} after filtering. Original count: ${finalVideos.length}`);
+        }
+        scene.videos = validVideosForScene.map(v => v.url);
         finalVideos.forEach(video => video && excludeVideoIds.push(video.id));
       }
 
@@ -546,10 +570,11 @@ export class ShortCreator {
         
         let finalVideoUrl = originalVideoUrl;
         if (cachedVideo) {
-          finalVideoUrl = cachedVideo.proxyUrl;
+          finalVideoUrl = cachedVideo.proxyUrl || originalVideoUrl; // Fallback to original URL if proxyUrl is missing
           logger.debug({ 
             originalUrl: originalVideoUrl, 
-            proxyUrl: finalVideoUrl,
+            proxyUrl: cachedVideo.proxyUrl,
+            finalVideoUrl: finalVideoUrl,
             size: cachedVideo.size 
           }, "Using cached video");
         } else {
@@ -564,6 +589,18 @@ export class ShortCreator {
               originalUrl: originalVideoUrl 
             }, "Video not cached, using original URL");
           }
+        }
+        
+        // Ensure finalVideoUrl is valid before adding to videos array
+        if (!finalVideoUrl) {
+          logger.error({
+            videoId,
+            sceneIndex,
+            partIndex: i,
+            validatedVideo,
+            originalVideoUrl
+          }, "Final video URL is null/undefined, this should not happen");
+          throw new Error(`Final video URL is null for scene ${sceneIndex}, part ${i}`);
         }
         
         sceneParts.push({
@@ -676,6 +713,17 @@ export class ShortCreator {
 
       // Para re-render, usar a URL do vídeo diretamente sem tentar revalidar
       let finalVideoUrl = videoUrl;
+      
+      // Ensure finalVideoUrl is valid
+      if (!finalVideoUrl) {
+        logger.error({
+          videoId,
+          sceneIndex,
+          videoUrl,
+          scene
+        }, "Final video URL is null/undefined in re-render");
+        throw new Error(`Final video URL is null for re-render scene ${sceneIndex}`);
+      }
       
       // Log para debug
       if (videoUrl.startsWith('/api/cached-video/')) {
@@ -1015,7 +1063,7 @@ export class ShortCreator {
 
   public async searchVideos(query: string): Promise<any> {
     logger.debug({ query }, "Searching videos");
-    const searchResults = await this.videoSearch.findVideos(query, 25, [], OrientationEnum.portrait, 25);
+    const searchResults = await this.videoSearch.findVideos(query, 25, [], OrientationEnum.portrait, 25, 'search');
     logger.debug({ query, count: searchResults.length }, "Found videos");
     return searchResults.map(v => ({
       ...v,
@@ -2004,5 +2052,9 @@ export class ShortCreator {
       await this.statusManager.setError(videoId, error.message || "Failed to re-render edited video");
       throw error;
     }
+  }
+
+  public getVideoProviderFacade(): VideoProviderFacade {
+    return this.videoProviderFacade;
   }
 }
