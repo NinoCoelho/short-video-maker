@@ -21,7 +21,7 @@ export default {
   },
   server: {
     host: '0.0.0.0',
-    port: 3121,
+    port: 3232,
     allowedHosts: ['*', 'ninomac.bonito-halosaur.ts.net'],
     proxy: {
       '/api/proxy': {
@@ -30,15 +30,15 @@ export default {
         rewrite: (path: string) => path.replace(/^\/api\/proxy/, ''),
       },
       '/api': {
-        target: 'http://localhost:3123',
+        target: 'http://localhost:3233',
         changeOrigin: true,
       },
       '/mcp': {
-        target: 'http://localhost:3123',
+        target: 'http://localhost:3233',
         changeOrigin: true,
       },
       '/pxv': {
-        target: 'http://localhost:3123',
+        target: 'http://localhost:3233',
         changeOrigin: true,
       },
     },

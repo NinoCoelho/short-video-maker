@@ -1,8 +1,8 @@
-import express from "express";
+import express, { Router } from "express";
 import fs from "fs";
 import path from "path";
 
-const router = express.Router();
+const router: Router = express.Router();
 const referenceDir = path.join(process.cwd(), "reference_audio");
 
 router.get("/", (req, res) => {

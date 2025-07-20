@@ -15,6 +15,9 @@ export class LocalImageAPI implements VideoProvider {
     retryCounter: number = 0,
   ): Promise<Video> {
     const videos = await this.findVideos(searchTerms, minDurationSeconds, excludeIds, orientation, 1);
+    if (!videos || videos.length === 0 || !videos[0] || !videos[0].url) {
+      throw new VideoSearchError(`No valid video found for search: ${searchTerms.join(' ')}`);
+    }
     return videos[0];
   }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -17,11 +17,27 @@ import {
   Alert,
   useTheme,
   alpha,
+  Chip,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
   Save as SaveIcon,
   Refresh as RefreshIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  ClearAll as ClearAllIcon,
+  Block as BlockIcon,
+  Storage as StorageIcon,
 } from '@mui/icons-material';
 
 const Settings: React.FC = () => {
@@ -36,12 +52,120 @@ const Settings: React.FC = () => {
     darkMode: true,
     videoQuality: 'high',
   });
+  const [negativeTerms, setNegativeTerms] = useState<string[]>([]);
+  const [newTerm, setNewTerm] = useState('');
+  const [showAddTermDialog, setShowAddTermDialog] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [cacheStats, setCacheStats] = useState({ size: 0, entries: 0 });
+  const [showCacheDialog, setShowCacheDialog] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    // Load existing settings and negative terms
+    const savedSettings = localStorage.getItem('userSettings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
+    
+    loadNegativeTerms();
+    loadCacheStats();
+  }, []);
+
+  const loadNegativeTerms = async () => {
+    try {
+      const response = await fetch('/api/video-search/negative-terms');
+      if (response.ok) {
+        const terms = await response.json();
+        setNegativeTerms(terms);
+      }
+    } catch (error) {
+      console.error('Error loading negative terms:', error);
+    }
+  };
+
+  const loadCacheStats = async () => {
+    try {
+      const response = await fetch('/api/video-search/cache-stats');
+      if (response.ok) {
+        const stats = await response.json();
+        setCacheStats(stats);
+      }
+    } catch (error) {
+      console.error('Error loading cache stats:', error);
+    }
+  };
+
+  const handleSave = async () => {
     // Save to localStorage or API
     localStorage.setItem('userSettings', JSON.stringify(settings));
-    setSuccess('Configurações salvas com sucesso!');
+    
+    // Save negative terms to backend
+    try {
+      await fetch('/api/video-search/negative-terms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terms: negativeTerms })
+      });
+      setSuccess('Configurações salvas com sucesso!');
+    } catch (error) {
+      setSuccess('Erro ao salvar configurações');
+    }
+    
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const handleAddTerm = async () => {
+    if (newTerm.trim() && !negativeTerms.includes(newTerm.trim())) {
+      const updatedTerms = [...negativeTerms, newTerm.trim()];
+      setNegativeTerms(updatedTerms);
+      setNewTerm('');
+      setShowAddTermDialog(false);
+      
+      // Save immediately to backend
+      try {
+        await fetch('/api/video-search/negative-terms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms: updatedTerms })
+        });
+        setSuccess('Termo adicionado com sucesso!');
+        setTimeout(() => setSuccess(null), 3000);
+      } catch (error) {
+        console.error('Error saving negative terms:', error);
+        setSuccess('Erro ao salvar termo negativo');
+        setTimeout(() => setSuccess(null), 3000);
+      }
+    }
+  };
+
+  const handleRemoveTerm = async (term: string) => {
+    const updatedTerms = negativeTerms.filter(t => t !== term);
+    setNegativeTerms(updatedTerms);
+    
+    // Save immediately to backend
+    try {
+      await fetch('/api/video-search/negative-terms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terms: updatedTerms })
+      });
+      setSuccess('Termo removido com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error('Error saving negative terms:', error);
+      setSuccess('Erro ao remover termo negativo');
+      setTimeout(() => setSuccess(null), 3000);
+    }
+  };
+
+  const handleClearCache = async () => {
+    try {
+      await fetch('/api/video-search/clear-cache', { method: 'POST' });
+      await loadCacheStats();
+      setSuccess('Cache limpo com sucesso!');
+      setShowCacheDialog(false);
+    } catch (error) {
+      setSuccess('Erro ao limpar cache');
+    }
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -63,6 +187,74 @@ const Settings: React.FC = () => {
       )}
 
       <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <Card elevation={0} sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                <BlockIcon sx={{ mr: 1 }} />
+                Termos Negativos para Busca de Vídeos
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Adicione termos que devem ser evitados na busca de vídeos de fundo
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                {negativeTerms.map((term, index) => (
+                  <Chip
+                    key={index}
+                    label={term}
+                    onDelete={() => handleRemoveTerm(term)}
+                    color="secondary"
+                    variant="outlined"
+                    size="small"
+                  />
+                ))}
+              </Box>
+              
+              <Button
+                startIcon={<AddIcon />}
+                onClick={() => setShowAddTermDialog(true)}
+                variant="outlined"
+                size="small"
+              >
+                Adicionar Termo
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12}>
+          <Card elevation={0} sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                <StorageIcon sx={{ mr: 1 }} />
+                Cache de Vídeos
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Gerencie o cache de vídeos de fundo baixados para os shorts
+              </Typography>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <Typography variant="body2">
+                  Entradas no cache: <strong>{cacheStats.entries}</strong>
+                </Typography>
+                <Typography variant="body2">
+                  Tamanho: <strong>{(cacheStats.size / 1024 / 1024).toFixed(2)} MB</strong>
+                </Typography>
+              </Box>
+              
+              <Button
+                startIcon={<ClearAllIcon />}
+                onClick={() => setShowCacheDialog(true)}
+                variant="outlined"
+                color="warning"
+                size="small"
+              >
+                Limpar Cache
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
         <Grid item xs={12} md={6}>
           <Card elevation={0} sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <CardContent sx={{ p: 3 }}>
@@ -191,6 +383,50 @@ const Settings: React.FC = () => {
           Restaurar Padrões
         </Button>
       </Box>
+
+      {/* Add Term Dialog */}
+      <Dialog open={showAddTermDialog} onClose={() => setShowAddTermDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Adicionar Termo Negativo</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Termo"
+            fullWidth
+            variant="outlined"
+            value={newTerm}
+            onChange={(e) => setNewTerm(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleAddTerm()}
+            helperText="Digite um termo que deve ser evitado na busca de vídeos"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowAddTermDialog(false)}>Cancelar</Button>
+          <Button onClick={handleAddTerm} variant="contained" disabled={!newTerm.trim()}>
+            Adicionar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Cache Clear Dialog */}
+      <Dialog open={showCacheDialog} onClose={() => setShowCacheDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Limpar Cache de Vídeos</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Tem certeza que deseja limpar o cache de vídeos?
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Esta ação irá remover {cacheStats.entries} vídeos ({(cacheStats.size / 1024 / 1024).toFixed(2)} MB) 
+            do cache. Os vídeos precisarão ser baixados novamente quando utilizados.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowCacheDialog(false)}>Cancelar</Button>
+          <Button onClick={handleClearCache} variant="contained" color="warning">
+            Limpar Cache
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -10,7 +10,7 @@ import { Config } from "./config";
 import { ShortCreator } from "./short-creator/ShortCreator";
 import { logger } from "./logger";
 import { Server } from "./server/server";
-import { LocalImageAPI } from "./short-creator/libraries/LocalImageAPI";
+import { VideoProviderFacade } from "./short-creator/libraries/VideoProviderFacade";
 import { VideoStatusManager } from "./short-creator/VideoStatusManager";
 import { LocalTTS } from "./short-creator/libraries/LocalTTS";
 
@@ -28,7 +28,7 @@ async function main() {
     // Inicializar componentes
     const remotion = new Remotion(bundled, config);
     const ffmpeg = new FFMpeg(config);
-    const localImageApi = new LocalImageAPI(config, config.port);
+    const videoProviderFacade = new VideoProviderFacade(config, config.port);
     const localTTS = await LocalTTS.init(config); // Usando LocalTTS real
     const statusManager = new VideoStatusManager(config);
 
@@ -37,7 +37,7 @@ async function main() {
       config,
       remotion,
       ffmpeg,
-      localImageApi,
+      videoProviderFacade,
       localTTS,
       statusManager
     );

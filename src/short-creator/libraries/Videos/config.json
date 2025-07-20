@@ -1,0 +1,75 @@
+{
+  "providers": {
+    "pexels": {
+      "enabled": true,
+      "weight": 0.3,
+      "rateLimit": {
+        "requests": 200,
+        "window": "hour"
+      }
+    },
+    "pixabay": {
+      "enabled": true,
+      "weight": 0.3,
+      "rateLimit": {
+        "requests": 5000,
+        "window": "hour"
+      }
+    },
+    "coverr": {
+      "enabled": true,
+      "weight": 0.2,
+      "specialization": [
+        "aesthetic",
+        "cinematic",
+        "beautiful",
+        "artistic"
+      ],
+      "rateLimit": {
+        "requests": 100,
+        "window": "hour"
+      }
+    },
+    "freepik": {
+      "enabled": false,
+      "weight": 0.2,
+      "requiresAttribution": true,
+      "specialization": [
+        "unique",
+        "creative",
+        "unusual",
+        "diverse"
+      ],
+      "rateLimit": {
+        "requests": 100,
+        "window": "hour"
+      }
+    }
+  },
+  "negativeKeywords": [
+    "nude",
+    "offensive",
+    "hate",
+    "racist",
+    "profanity",
+    "lgbt",
+    "gay",
+    "hinduism",
+    "hindu",
+    "buddha",
+    "buddhism",
+    "islam",
+    "muslim"
+  ],
+  "usageTracking": {
+    "enabled": true,
+    "maxHistoryDays": 30,
+    "preventRepeatsWithinDays": 7
+  },
+  "search": {
+    "parallelTimeout": 5000,
+    "minDuration": 5,
+    "maxDuration": 30,
+    "preferredAspectRatio": "9:16"
+  }
+}

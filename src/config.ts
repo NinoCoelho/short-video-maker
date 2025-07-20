@@ -15,6 +15,10 @@ const envSchema = z.object({
   RUNNING_IN_DOCKER: z.string().optional(),
   TTS_VERBOSE: z.string().optional(),
   TTS_MODEL: z.string().optional(),
+  PEXELS_API_KEY: z.string().optional(),
+  PIXABAY_API_KEY: z.string().optional(),
+  COVERR_API_KEY: z.string().optional(),
+  FREEPIK_API_KEY: z.string().optional(),
   PORT: z.string().optional(),
   DEV: z.string().optional(),
   CONCURRENCY: z.string().optional(),
@@ -30,7 +34,7 @@ const env = envSchema.parse(process.env);
 // Default paths
 const defaultDataDirPath = path.join(process.cwd(), "data");
 const defaultLibsDirPath = path.join(process.cwd(), "libs");
-const defaultPort = 3123;
+const defaultPort = 3233;
 
 export interface Config {
   dataDirPath: string;
@@ -38,6 +42,10 @@ export interface Config {
   runningInDocker: boolean;
   ttsVerbose: boolean;
   ttsModel: string;
+  pexelsApiKey: string;
+  pixabayApiKey: string;
+  coverrApiKey: string;
+  freepikApiKey: string;
   port: number;
   devMode: boolean;
   concurrency: number;
@@ -64,6 +72,10 @@ export class Config {
   public runningInDocker: boolean;
   public ttsVerbose: boolean;
   public ttsModel: string;
+  public pexelsApiKey: string;
+  public pixabayApiKey: string;
+  public coverrApiKey: string;
+  public freepikApiKey: string;
   public port: number;
   public devMode: boolean;
   public concurrency: number;
@@ -89,6 +101,10 @@ export class Config {
     this.runningInDocker = env.RUNNING_IN_DOCKER === "true";
     this.ttsVerbose = env.TTS_VERBOSE === "true";
     this.ttsModel = env.TTS_MODEL || "default";
+    this.pexelsApiKey = env.PEXELS_API_KEY || "";
+    this.pixabayApiKey = env.PIXABAY_API_KEY || "";
+    this.coverrApiKey = env.COVERR_API_KEY || "";
+    this.freepikApiKey = env.FREEPIK_API_KEY || "";
     this.port = env.PORT ? parseInt(env.PORT) : defaultPort;
     this.devMode = env.DEV === "true";
     this.concurrency = 1; // Forçar processamento sequencial

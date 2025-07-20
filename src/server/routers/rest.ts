@@ -1197,5 +1197,150 @@ Try this approach and let me know your results in the comments!
         });
       }
     });
+
+    // Video Provider Management Endpoints
+    this.router.get("/video-providers/stats", (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        const facade = this.shortCreator.getVideoProviderFacade?.();
+        if (!facade) {
+          return res.status(503).json({ error: "Video provider facade not available" });
+        }
+        
+        const providerStats = facade.getProviderStats();
+        const usageStats = facade.getUsageStats();
+        const rateLimitStats = facade.getRateLimitStats();
+        
+        res.status(200).json({
+          providers: providerStats,
+          usage: usageStats,
+          rateLimits: rateLimitStats,
+        });
+      } catch (error) {
+        logger.error({ error }, "Error getting video provider stats");
+        res.status(500).json({
+          error: "Failed to get video provider stats",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+
+    this.router.get("/video-providers/negative-keywords", (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        const facade = this.shortCreator.getVideoProviderFacade?.();
+        if (!facade) {
+          return res.status(503).json({ error: "Video provider facade not available" });
+        }
+        
+        const keywords = facade.getNegativeKeywords();
+        res.status(200).json({ keywords });
+      } catch (error) {
+        logger.error({ error }, "Error getting negative keywords");
+        res.status(500).json({
+          error: "Failed to get negative keywords",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+
+    this.router.post("/video-providers/negative-keywords", (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        const { keywords } = req.body;
+        
+        if (!Array.isArray(keywords)) {
+          return res.status(400).json({ error: "Keywords must be an array" });
+        }
+
+        const facade = this.shortCreator.getVideoProviderFacade?.();
+        if (!facade) {
+          return res.status(503).json({ error: "Video provider facade not available" });
+        }
+        
+        facade.addNegativeKeywords(keywords);
+        res.status(200).json({ 
+          message: "Negative keywords added successfully",
+          addedCount: keywords.length
+        });
+      } catch (error) {
+        logger.error({ error }, "Error adding negative keywords");
+        res.status(500).json({
+          error: "Failed to add negative keywords",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+
+    this.router.delete("/video-providers/negative-keywords", (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        const { keywords } = req.body;
+        
+        if (!Array.isArray(keywords)) {
+          return res.status(400).json({ error: "Keywords must be an array" });
+        }
+
+        const facade = this.shortCreator.getVideoProviderFacade?.();
+        if (!facade) {
+          return res.status(503).json({ error: "Video provider facade not available" });
+        }
+        
+        facade.removeNegativeKeywords(keywords);
+        res.status(200).json({ 
+          message: "Negative keywords removed successfully",
+          removedCount: keywords.length
+        });
+      } catch (error) {
+        logger.error({ error }, "Error removing negative keywords");
+        res.status(500).json({
+          error: "Failed to remove negative keywords",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+
+    this.router.get("/video-providers/usage-history", (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        const { projectId, limit = 100 } = req.query;
+
+        const facade = this.shortCreator.getVideoProviderFacade?.();
+        if (!facade) {
+          return res.status(503).json({ error: "Video provider facade not available" });
+        }
+        
+        const history = facade.getUsageHistory?.(projectId as string, Number(limit));
+        
+        if (!history) {
+          return res.status(200).json({ history: [], message: "Usage history not available" });
+        }
+        
+        res.status(200).json({ 
+          history,
+          projectId: projectId || 'all',
+          totalEntries: history.length
+        });
+      } catch (error) {
+        logger.error({ error }, "Error getting usage history");
+        res.status(500).json({
+          error: "Failed to get usage history",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+
+    // Video proxy endpoint to handle CORS issues
+    this.router.options("/video-proxy", (req: ExpressRequest, res: ExpressResponse) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+      res.setHeader('Access-Control-Max-Age', '3600');
+      res.sendStatus(204);
+    });
+    
+    this.router.get("/video-proxy", async (req: ExpressRequest, res: ExpressResponse) => {
+      const videoProxy = require("../routes/videoProxy").videoProxy;
+      await videoProxy(req, res);
+    });
+
+    // Video search configuration routes
+    const { videoSearchConfigRouter } = require("../routes/videoSearchConfig");
+    this.router.use("/video-search", videoSearchConfigRouter);
   }
 }

@@ -14,6 +14,13 @@ import {
   useTheme,
   alpha,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   VideoLibrary as VideoIcon,
@@ -61,6 +68,13 @@ const Dashboard: React.FC = () => {
   const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ 
+    open: false, 
+    message: '', 
+    severity: 'success' 
+  });
 
   const fetchDashboardData = async () => {
     try {
@@ -100,23 +114,38 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteVideo = async (videoId: string, event: React.MouseEvent) => {
+  const handleDeleteClick = (videoId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Previne navegação quando clica no delete
-    
-    if (!window.confirm('Tem certeza que deseja deletar este vídeo?')) {
-      return;
-    }
+    setVideoToDelete(videoId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!videoToDelete) return;
 
     try {
-      setDeletingVideoId(videoId);
-      await axios.delete(`/api/videos/${videoId}`);
+      setDeletingVideoId(videoToDelete);
+      await axios.delete(`/api/videos/${videoToDelete}`);
+      
       // Atualizar a lista após deletar
       await fetchDashboardData();
+      
+      setSnackbar({
+        open: true,
+        message: 'Vídeo deletado com sucesso',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Error deleting video:', error);
-      alert('Erro ao deletar vídeo. Tente novamente.');
+      setSnackbar({
+        open: true,
+        message: 'Erro ao deletar vídeo. Tente novamente.',
+        severity: 'error'
+      });
     } finally {
       setDeletingVideoId(null);
+      setDeleteDialogOpen(false);
+      setVideoToDelete(null);
     }
   };
 
@@ -426,7 +455,7 @@ const Dashboard: React.FC = () => {
                             <IconButton 
                               size="small" 
                               color="error"
-                              onClick={(e) => handleDeleteVideo(video.id, e)}
+                              onClick={(e) => handleDeleteClick(video.id, e)}
                               disabled={deletingVideoId === video.id}
                               sx={{
                                 '&:hover': {
@@ -474,6 +503,63 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            backgroundColor: theme.palette.background.paper,
+            backgroundImage: 'none',
+          }
+        }}
+      >
+        <DialogTitle>
+          Confirmar Exclusão
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Tem certeza que deseja deletar este vídeo? Esta ação não pode ser desfeita.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              setVideoToDelete(null);
+            }}
+            disabled={deletingVideoId !== null}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            disabled={deletingVideoId !== null}
+            startIcon={deletingVideoId !== null ? <CircularProgress size={16} /> : <DeleteIcon />}
+          >
+            {deletingVideoId !== null ? 'Deletando...' : 'Deletar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

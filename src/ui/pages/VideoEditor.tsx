@@ -108,6 +108,11 @@ const VideoEditor: React.FC = () => {
       return url;
     }
     
+    // Se é uma URL externa (CDN), usa o proxy para evitar CORS
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return `/api/video-proxy?url=${encodeURIComponent(url)}`;
+    }
+    
     // Se é uma URL de cached-video local, extrai apenas o path
     if (url.includes('localhost') && url.includes('/api/cached-video/')) {
       const urlObj = new URL(url);

@@ -196,8 +196,8 @@ O servidor MCP v2.0 inclui 7 tools principais:
 
 ### Conexão MCP
 ```
-Endpoint SSE: http://localhost:3000/mcp/sse
-Health Check: http://localhost:3000/mcp/health
+Endpoint SSE: http://localhost:3233/mcp/sse
+Health Check: http://localhost:3233/mcp/health
 ```
 
 ## 🎨 Personalização

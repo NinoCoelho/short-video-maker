@@ -92,7 +92,7 @@ const ApiDocumentation: React.FC = () => {
             Todas as requisições devem incluir o header <code>Content-Type: application/json</code>.
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Base URL: <code>http://localhost:3000</code>
+            Base URL: <code>http://localhost:3233</code>
           </Typography>
         </CardContent>
       </Card>

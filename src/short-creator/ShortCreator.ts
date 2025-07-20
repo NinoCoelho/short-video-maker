@@ -356,6 +356,9 @@ export class ShortCreator {
     const remotionDataNested: Scene[][] = [];
     const newScriptScenes: SceneInput[] = [];
     const allVideoUrls: string[] = [];
+    
+    // Track all videos found (not just used) to prevent duplicates
+    const allFoundVideoIds: Set<string> = new Set();
 
     await this.statusManager.setProgress(videoId, 15, "Finding videos for scenes...");
 
@@ -401,6 +404,18 @@ export class ShortCreator {
             
             // Busca vídeos para substituir os que não foram encontrados
             const searchTerms = scene.searchTerms.filter(term => term.length >= 4).join(" ") || scene.searchTerms.join(" ");
+            
+            // Update excludeVideoIds with all previously found videos
+            excludeVideoIds.length = 0;
+            excludeVideoIds.push(...Array.from(allFoundVideoIds));
+            
+            logger.info({ 
+              videoId, 
+              sceneIndex: inputScenes.indexOf(originalScene),
+              excludeCount: excludeVideoIds.length,
+              searchTerms 
+            }, "Searching for replacement videos with exclusion list");
+            
             const replacementVideos = await this.videoSearch.findVideos(
               searchTerms,
               10,
@@ -409,6 +424,14 @@ export class ShortCreator {
               missingCount,
               videoId
             );
+            
+            // Track ALL found videos to prevent duplicates
+            replacementVideos.forEach(v => {
+              if (v && v.id) {
+                allFoundVideoIds.add(v.id);
+                logger.debug({ videoId, foundVideoId: v.id, url: v.url }, "Found replacement video");
+              }
+            });
             
             // Combina vídeos válidos com os de substituição
             finalVideos = [...validVideos, ...replacementVideos];
@@ -419,7 +442,11 @@ export class ShortCreator {
               throw new Error(`No valid videos found for scene ${inputScenes.indexOf(originalScene)} after filtering. Original count: ${finalVideos.length}`);
             }
             scene.videos = validVideosForScene.map(v => v.url);
-            finalVideos.forEach(video => video && excludeVideoIds.push(video.id));
+            
+            // Track all videos that were found (both valid and replacements)
+            validVideos.forEach(v => {
+              if (v && v.id) allFoundVideoIds.add(v.id);
+            });
           } else {
             // Todos os vídeos foram encontrados
             finalVideos = validVideos;
@@ -433,6 +460,18 @@ export class ShortCreator {
           
           // Fallback completo para busca nova
           const searchTerms = scene.searchTerms.filter(term => term.length >= 4).join(" ") || scene.searchTerms.join(" ");
+          
+          // Update excludeVideoIds with all previously found videos
+          excludeVideoIds.length = 0;
+          excludeVideoIds.push(...Array.from(allFoundVideoIds));
+          
+          logger.info({ 
+            videoId, 
+            sceneIndex: inputScenes.indexOf(originalScene),
+            excludeCount: excludeVideoIds.length,
+            searchTerms 
+          }, "Fallback search with exclusion list");
+          
           finalVideos = await this.videoSearch.findVideos(
             searchTerms,
             10,
@@ -441,17 +480,37 @@ export class ShortCreator {
             this.processTextForTTS(scene.text).length,
             videoId
           );
+          
+          // Track ALL found videos
+          finalVideos.forEach(v => {
+            if (v && v.id) {
+              allFoundVideoIds.add(v.id);
+              logger.debug({ videoId, foundVideoId: v.id, url: v.url }, "Found fallback video");
+            }
+          });
           const validVideosForScene = finalVideos.filter(v => v && v.url);
           if (validVideosForScene.length === 0) {
             throw new Error(`No valid videos found for scene ${inputScenes.indexOf(originalScene)} after filtering. Original count: ${finalVideos.length}`);
           }
           scene.videos = validVideosForScene.map(v => v.url);
-          finalVideos.forEach(video => video && excludeVideoIds.push(video.id));
         }
       } else {
         logger.debug({ videoId, sceneIndex: inputScenes.indexOf(originalScene) }, "Creation: Searching for new videos.");
         const searchTerms =
           scene.searchTerms.filter(term => term.length >= 4).join(" ") || scene.searchTerms.join(" ");
+        
+        // Update excludeVideoIds with all previously found videos
+        excludeVideoIds.length = 0;
+        excludeVideoIds.push(...Array.from(allFoundVideoIds));
+        
+        logger.info({ 
+          videoId, 
+          sceneIndex: inputScenes.indexOf(originalScene),
+          excludeCount: excludeVideoIds.length,
+          searchTerms,
+          textParts: this.processTextForTTS(scene.text).length
+        }, "Searching for new videos with exclusion list");
+        
         finalVideos = await this.videoSearch.findVideos(
           searchTerms,
           10,
@@ -460,22 +519,96 @@ export class ShortCreator {
           this.processTextForTTS(scene.text).length,
           videoId
         );
+        
+        // Track ALL found videos to prevent duplicates
+        finalVideos.forEach(v => {
+          if (v && v.id) {
+            allFoundVideoIds.add(v.id);
+            logger.debug({ videoId, foundVideoId: v.id, url: v.url }, "Found new video");
+          }
+        });
         const validVideosForScene = finalVideos.filter(v => v && v.url);
         if (validVideosForScene.length === 0) {
           throw new Error(`No valid videos found for scene ${inputScenes.indexOf(originalScene)} after filtering. Original count: ${finalVideos.length}`);
         }
         scene.videos = validVideosForScene.map(v => v.url);
-        finalVideos.forEach(video => video && excludeVideoIds.push(video.id));
       }
 
       const textParts = this.processTextForTTS(scene.text);
       if (finalVideos.length < textParts.length) {
-        throw new Error(
-          `Could not find enough videos for scene ${inputScenes.indexOf(originalScene)}. Found ${finalVideos.length}, needed ${textParts.length}.`,
-        );
+        logger.warn({
+          videoId,
+          sceneIndex: inputScenes.indexOf(originalScene),
+          videosFound: finalVideos.length,
+          videosNeeded: textParts.length,
+          excludeIds: excludeVideoIds.length
+        }, "Not enough unique videos found, trying extended search");
+        
+        // Try extended search with relaxed exclusion criteria
+        try {
+          const currentSearchTerms = 
+            scene.searchTerms.filter(term => term.length >= 4).join(" ") || scene.searchTerms.join(" ");
+          
+          const additionalVideos = await this.videoSearch.findVideos(
+            currentSearchTerms,
+            10,
+            [], // No exclusions for additional search
+            orientation,
+            textParts.length - finalVideos.length,
+            videoId
+          );
+          
+          // Filter out videos already in finalVideos
+          const filteredAdditional = additionalVideos.filter(video => 
+            !finalVideos.some(existing => existing.id === video.id)
+          );
+          
+          finalVideos.push(...filteredAdditional);
+          
+          logger.info({
+            videoId,
+            sceneIndex: inputScenes.indexOf(originalScene),
+            additionalVideosFound: filteredAdditional.length,
+            totalVideosNow: finalVideos.length
+          }, "Extended search completed");
+        } catch (error) {
+          logger.error({
+            videoId,
+            sceneIndex: inputScenes.indexOf(originalScene),
+            error
+          }, "Extended search failed");
+        }
+        
+        // If still not enough, reuse videos as fallback
+        if (finalVideos.length < textParts.length) {
+          logger.warn({
+            videoId,
+            sceneIndex: inputScenes.indexOf(originalScene),
+            videosFound: finalVideos.length,
+            videosNeeded: textParts.length
+          }, "Still not enough videos, will reuse existing videos");
+          
+          while (finalVideos.length < textParts.length) {
+            const videoToReuse = finalVideos[finalVideos.length % finalVideos.length] || finalVideos[0];
+            if (!videoToReuse) {
+              throw new Error(
+                `Could not find any videos for scene ${inputScenes.indexOf(originalScene)}.`
+              );
+            }
+            finalVideos.push(videoToReuse);
+          }
+        }
       }
 
       scenesWithVideos.push({ scene, videos: finalVideos });
+      
+      // Log selected videos for this scene
+      logger.info({
+        videoId,
+        sceneIndex: inputScenes.indexOf(originalScene),
+        selectedVideos: finalVideos.map(v => ({ id: v.id, url: v.url })),
+        totalFoundSoFar: allFoundVideoIds.size
+      }, "Videos selected for scene");
       
       // Coletar todas as URLs de vídeo para pré-download
       finalVideos.forEach(video => {
@@ -486,6 +619,15 @@ export class ShortCreator {
     }
 
     await this.statusManager.setProgress(videoId, 25, "Starting video downloads and TTS generation...");
+    
+    // Log final video selection summary
+    logger.info({
+      videoId,
+      totalScenesProcessed: scenesWithVideos.length,
+      totalUniqueVideosFound: allFoundVideoIds.size,
+      totalVideosUsed: allVideoUrls.length,
+      allFoundVideoIds: Array.from(allFoundVideoIds)
+    }, "Video selection completed - checking for duplicates");
 
     // FASE 2: Iniciar downloads de vídeos em paralelo com geração de TTS
     logger.info({ videoId, videoCount: allVideoUrls.length }, "Starting parallel video preload");
