@@ -7,338 +7,443 @@ import { logger } from '../../logger';
 import fetch from 'node-fetch';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
+import { 
+  PathTraversalGuard, 
+  URLValidator, 
+  APIKeyValidator, 
+  validateRequest,
+  validationSchemas,
+  secureFileUpload
+} from '../middleware/security';
 
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { Config } from "../../config";
 import { RenderRequest, VoiceEnum, OrientationEnum, MusicMoodEnum, SceneInput, RenderConfig } from "../../types/shorts";
 import { VideoStatusManager } from "../../short-creator/VideoStatusManager";
+import { TranslationService } from '../../services/TranslationService';
+import { TranscriptionService } from '../../services/TranscriptionService';
+import translationRoutes, { initializeTranslationRoutes } from '../routes/translationRoutes';
+import { ResponseFormatter } from '../utils/ResponseFormatter';
+import { NotFoundError, ProcessingError, ValidationError } from '../errors/AppError';
+import { asyncHandler } from '../middleware/errorHandler';
 
 export class APIRouter {
   router: Router;
   private shortCreator: ShortCreator;
   private config: Config;
   private videoStatusManager: VideoStatusManager;
+  private translationService?: TranslationService;
+  private transcriptionService?: TranscriptionService;
 
-  constructor(config: Config, shortCreator: ShortCreator, videoStatusManager: VideoStatusManager) {
+  constructor(
+    config: Config, 
+    shortCreator: ShortCreator, 
+    videoStatusManager: VideoStatusManager,
+    translationService?: TranslationService,
+    transcriptionService?: TranscriptionService
+  ) {
     this.router = Router();
     this.config = config;
     this.shortCreator = shortCreator;
     this.videoStatusManager = videoStatusManager;
+    this.translationService = translationService;
+    this.transcriptionService = transcriptionService;
     this.router.use(express.json());
     this.setupRoutes();
   }
 
   private setupRoutes() {
-    this.router.get("/status/:id", async (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const { id } = req.params;
-        const statusObject = await this.shortCreator.status(id);
-        res.status(200).json(statusObject);
-      } catch (error) {
-        logger.error({ error }, "Error fetching video status");
-        res.status(500).json({
-          error: "Failed to fetch video status",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+    this.router.get("/status/:id", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { id } = req.params;
+      
+      if (!id) {
+        throw new ValidationError("Video ID is required");
       }
-    });
 
-    this.router.get("/logs/:id", async (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const { id } = req.params;
-        const { limit = 50 } = req.query;
-        
-        // Aqui você pode implementar um sistema de logs em tempo real
-        // Por enquanto, vamos retornar logs básicos do sistema
-        const logs = [
-          {
-            timestamp: new Date().toISOString(),
-            level: "info",
-            message: `Video ${id} processing started`,
-            videoId: id
-          }
-        ];
-        
-        res.status(200).json({
-          logs: logs.slice(-Number(limit)),
-          total: logs.length
-        });
-      } catch (error) {
-        logger.error({ error }, "Error fetching video logs");
-        res.status(500).json({
-          error: "Failed to fetch video logs",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+      const statusObject = await this.shortCreator.status(id);
+      
+      if (!statusObject) {
+        throw new NotFoundError("Video", id);
       }
-    });
 
-    this.router.post("/render", async (req: ExpressRequest, res: ExpressResponse) => {
+      ResponseFormatter.success(res, statusObject);
+    }));
+
+    this.router.get("/logs/:id", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { id } = req.params;
+      const { limit = 50 } = req.query;
+      
+      if (!id) {
+        throw new ValidationError("Video ID is required");
+      }
+
+      const parsedLimit = parseInt(limit as string, 10);
+      if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 1000) {
+        throw new ValidationError("Limit must be a number between 1 and 1000");
+      }
+      
+      // Aqui você pode implementar um sistema de logs em tempo real
+      // Por enquanto, vamos retornar logs básicos do sistema
+      const logs = [
+        {
+          timestamp: new Date().toISOString(),
+          level: "info",
+          message: `Video ${id} processing started`,
+          videoId: id
+        }
+      ];
+      
+      ResponseFormatter.success(res, {
+        logs: logs.slice(-parsedLimit),
+        total: logs.length
+      });
+    }));
+
+    this.router.post("/render", 
+      validateRequest(validationSchemas.renderRequest),
+      URLValidator.middleware(['newVideoUrl']),
+      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const renderRequest = req.body as RenderRequest;
-      try {
-        let videoId: string;
-        if (renderRequest.id) {
-          // Re-renderiza um vídeo existente
-          videoId = renderRequest.id;
+      
+      // Validate required fields
+      if (!renderRequest.scenes && !renderRequest.id) {
+        throw new ValidationError("Either scenes or video ID is required");
+      }
+      
+      if (!renderRequest.config && !renderRequest.id) {
+        throw new ValidationError("Configuration is required for new videos");
+      }
+
+      let videoId: string;
+      if (renderRequest.id) {
+        // Re-renderiza um vídeo existente
+        videoId = renderRequest.id;
+        
+        // Se não há scenes ou config no request, carrega do arquivo existente
+        let scenes = renderRequest.scenes;
+        let config = renderRequest.config;
+        
+        if (!scenes || !config) {
+          const existingData = this.shortCreator.getScriptById(videoId);
+          if (!existingData) {
+            throw new NotFoundError("Video", videoId);
+          }
           
-          // Se não há scenes ou config no request, carrega do arquivo existente
-          let scenes = renderRequest.scenes;
-          let config = renderRequest.config;
+          logger.debug({ videoId, existingData: !!existingData, hasScenes: !!existingData.scenes, hasConfig: !!existingData.config }, "Loading existing data for re-render");
+          
+          scenes = scenes || existingData.scenes;
+          config = config || existingData.config;
           
           if (!scenes || !config) {
-            const existingData = this.shortCreator.getScriptById(videoId);
-            if (!existingData) {
-              throw new Error(`No existing data found for video ${videoId}`);
-            }
-            
-            logger.debug({ videoId, existingData: !!existingData, hasScenes: !!existingData.scenes, hasConfig: !!existingData.config }, "Loading existing data for re-render");
-            
-            scenes = scenes || existingData.scenes;
-            config = config || existingData.config;
-            
-            logger.debug({ videoId, config }, "Config before defaults");
-            
-            // Garante que o config tenha valores padrão necessários
-            config = {
-              ...config,
-              orientation: config.orientation || OrientationEnum.portrait,
-              voice: config.voice || VoiceEnum.Paulo,
-              language: config.language || "pt"
-            };
-            
-            logger.debug({ videoId, config }, "Config after defaults");
+            throw new ProcessingError("Missing scenes or config data", videoId, "validation");
           }
           
-          await this.shortCreator.reRenderVideo(videoId, scenes, config);
-        } else {
-          // Cria um novo vídeo
-          videoId = await this.shortCreator.addToQueue(
-            renderRequest.scenes,
-            renderRequest.config
-          );
+          logger.debug({ videoId, config }, "Config before defaults");
+          
+          // Garante que o config tenha valores padrão necessários
+          config = {
+            ...config,
+            orientation: config.orientation || OrientationEnum.portrait,
+            voice: config.voice || VoiceEnum.Paulo,
+            language: config.language || "pt"
+          };
+          
+          logger.debug({ videoId, config }, "Config after defaults");
         }
-        res.status(202).json({
-          message: "Video rendering started",
-          videoId,
-        });
-      } catch (error) {
-        logger.error({ error }, "Error creating short");
-        res.status(500).json({
-          error: "Failed to start video rendering",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+        
+        await this.shortCreator.reRenderVideo(videoId, scenes, config);
+      } else {
+        // Cria um novo vídeo
+        videoId = await this.shortCreator.addToQueue(
+          renderRequest.scenes,
+          renderRequest.config
+        );
       }
-    });
+      
+      ResponseFormatter.success(res, {
+        message: "Video rendering started",
+        videoId,
+      }, 202);
+    }));
 
     // Alias para /api/short-video (mantém compatibilidade)
-    this.router.post("/short-video", async (req: ExpressRequest, res: ExpressResponse) => {
+    this.router.post("/short-video", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const renderRequest = req.body as RenderRequest;
-      try {
-        let videoId: string;
-        if (renderRequest.id) {
-          // Re-renderiza um vídeo existente
-          videoId = renderRequest.id;
-          await this.shortCreator.reRenderVideo(
-            videoId,
-            renderRequest.scenes,
-            renderRequest.config
-          );
-        } else {
-          // Cria um novo vídeo
-          videoId = await this.shortCreator.addToQueue(
-            renderRequest.scenes,
-            renderRequest.config
-          );
-        }
-        res.status(202).json({
-          message: "Video rendering started",
-          videoId,
-        });
-      } catch (error) {
-        logger.error({ error }, "Error creating short");
-        res.status(500).json({
-          error: "Failed to start video rendering",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+      
+      // Validate required fields
+      if (!renderRequest.scenes && !renderRequest.id) {
+        throw new ValidationError("Either scenes or video ID is required");
       }
-    });
+      
+      if (!renderRequest.config && !renderRequest.id) {
+        throw new ValidationError("Configuration is required for new videos");
+      }
+
+      let videoId: string;
+      if (renderRequest.id) {
+        // Re-renderiza um vídeo existente
+        videoId = renderRequest.id;
+        
+        if (!renderRequest.scenes || !renderRequest.config) {
+          throw new ValidationError("Scenes and config are required for re-rendering");
+        }
+        
+        await this.shortCreator.reRenderVideo(
+          videoId,
+          renderRequest.scenes,
+          renderRequest.config
+        );
+      } else {
+        // Cria um novo vídeo
+        videoId = await this.shortCreator.addToQueue(
+          renderRequest.scenes,
+          renderRequest.config
+        );
+      }
+      
+      ResponseFormatter.success(res, {
+        message: "Video rendering started",
+        videoId,
+      }, 202);
+    }));
 
     // Endpoint para status do vídeo (/api/short-video/:id/status)
-    this.router.get("/short-video/:id/status", async (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const { id } = req.params;
-        const statusObject = await this.shortCreator.status(id);
-        res.status(200).json(statusObject);
-      } catch (error) {
-        logger.error({ error }, "Error fetching video status");
-        res.status(500).json({
-          error: "Failed to fetch video status",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+    this.router.get("/short-video/:id/status", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { id } = req.params;
+      
+      if (!id) {
+        throw new ValidationError("Video ID is required");
       }
-    });
+
+      const statusObject = await this.shortCreator.status(id);
+      
+      if (!statusObject) {
+        throw new NotFoundError("Video", id);
+      }
+
+      ResponseFormatter.success(res, statusObject);
+    }));
 
     // Endpoint para download do vídeo (/api/short-video/:id)
-    this.router.get("/short-video/:id", (req, res) => {
+    this.router.get("/short-video/:id", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const { id } = req.params;
+      
+      if (!id) {
+        throw new ValidationError("Video ID is required");
+      }
+      
       const videoPath = this.shortCreator.getVideoPath(id);
 
       if (!videoPath || !fs.existsSync(videoPath)) {
-        return res.status(404).json({ error: "Video not found" });
+        throw new NotFoundError("Video", id);
       }
 
-      const stat = fs.statSync(videoPath);
-      const fileSize = stat.size;
-      const range = req.headers.range;
+      try {
+        const stat = fs.statSync(videoPath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
 
-      if (range) {
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunksize = (end - start) + 1;
-        const file = fs.createReadStream(videoPath, { start, end });
-        const head = {
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunksize,
-          'Content-Type': 'video/mp4',
-        };
-        res.writeHead(206, head);
-        file.pipe(res);
-      } else {
-        const head = {
-          'Content-Length': fileSize,
-          'Content-Type': 'video/mp4',
-        };
-        res.writeHead(200, head);
-        fs.createReadStream(videoPath).pipe(res);
+        if (range) {
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          const chunksize = (end - start) + 1;
+          const file = fs.createReadStream(videoPath, { start, end });
+          const head = {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': 'video/mp4',
+          };
+          res.writeHead(206, head);
+          file.pipe(res);
+        } else {
+          const head = {
+            'Content-Length': fileSize,
+            'Content-Type': 'video/mp4',
+          };
+          res.writeHead(200, head);
+          fs.createReadStream(videoPath).pipe(res);
+        }
+      } catch (error) {
+        throw new ProcessingError(`Failed to serve video file: ${error.message}`, id, "file_serving");
       }
-    });
+    }));
 
     // Endpoint para listar vídeos (/api/short-videos)
-    this.router.get("/short-videos", async (_req, res) => {
-      try {
-        const videos = await this.shortCreator.getAllVideos();
-        res.json({ videos });
-        } catch (error) {
-        logger.error({ error }, "Error fetching videos");
-          res.status(500).json({
-          error: "Failed to fetch videos",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+    this.router.get("/short-videos", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { page = 1, limit = 10 } = req.query;
+      
+      const parsedPage = parseInt(page as string, 10);
+      const parsedLimit = parseInt(limit as string, 10);
+      
+      if (isNaN(parsedPage) || parsedPage < 1) {
+        throw new ValidationError("Page must be a positive number");
       }
-    });
+      
+      if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+        throw new ValidationError("Limit must be a number between 1 and 100");
+      }
+      
+      const videos = await this.shortCreator.getAllVideos();
+      
+      // Simple pagination implementation
+      const startIndex = (parsedPage - 1) * parsedLimit;
+      const endIndex = startIndex + parsedLimit;
+      const paginatedVideos = videos.slice(startIndex, endIndex);
+      
+      const pagination = {
+        page: parsedPage,
+        limit: parsedLimit,
+        total: videos.length,
+        totalPages: Math.ceil(videos.length / parsedLimit),
+        hasNext: endIndex < videos.length,
+        hasPrevious: parsedPage > 1
+      };
+      
+      ResponseFormatter.successPaginated(res, paginatedVideos, pagination);
+    }));
 
     // Endpoint para deletar vídeo (/api/short-video/:id)
-    this.router.delete("/short-video/:id", async (req, res) => {
+    this.router.delete("/short-video/:id", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const { id } = req.params;
-      try {
-        await this.shortCreator.deleteVideo(id);
-        res.status(200).json({ success: true });
-      } catch (error) {
-        logger.error({ error, id }, "Error deleting video");
-        res.status(500).json({
-          error: "Failed to delete video",
-          details: error instanceof Error ? error.message : "Unknown error"
-        });
+      
+      if (!id) {
+        throw new ValidationError("Video ID is required");
       }
-    });
+      
+      await this.shortCreator.deleteVideo(id);
+      
+      ResponseFormatter.success(res, { 
+        message: "Video deleted successfully",
+        videoId: id 
+      });
+    }));
 
-    this.router.post(
-      "/remotion-webhook",
-      async (req: ExpressRequest, res: ExpressResponse) => {
-        console.log("Received remotion webhook", req.body);
-        res.status(200).json({ message: "Webhook received" });
-      },
-    );
+    this.router.post("/remotion-webhook", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      logger.info({ webhook: req.body }, "Received remotion webhook");
+      ResponseFormatter.success(res, { message: "Webhook received" });
+    }));
 
-    this.router.get("/videos", async (_req, res) => {
-      try {
-        const videos = await this.shortCreator.getAllVideos();
-        res.json(videos);
-      } catch (error) {
-        logger.error({ error }, "Error fetching videos");
-        res.status(500).json({
-          error: "Failed to fetch videos",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    });
+    this.router.get("/videos", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const videos = await this.shortCreator.getAllVideos();
+      ResponseFormatter.success(res, videos);
+    }));
 
-    this.router.get("/video/:id", (req, res) => {
+    this.router.get("/video/:id", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const { id } = req.params;
+      
+      if (!id) {
+        throw new ValidationError("Video ID is required");
+      }
+      
       const videoPath = this.shortCreator.getVideoPath(id);
 
       if (!videoPath || !fs.existsSync(videoPath)) {
-        return res.status(404).json({ error: "Video not found" });
+        throw new NotFoundError("Video", id);
       }
 
-      const stat = fs.statSync(videoPath);
-      const fileSize = stat.size;
-      const range = req.headers.range;
+      try {
+        const stat = fs.statSync(videoPath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
 
-      if (range) {
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunksize = (end - start) + 1;
-        const file = fs.createReadStream(videoPath, { start, end });
-        const head = {
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunksize,
-          'Content-Type': 'video/mp4',
-        };
-        res.writeHead(206, head);
-        file.pipe(res);
-      } else {
+        if (range) {
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          const chunksize = (end - start) + 1;
+          const file = fs.createReadStream(videoPath, { start, end });
+          const head = {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': 'video/mp4',
+          };
+          res.writeHead(206, head);
+          file.pipe(res);
+        } else {
+          const head = {
+            'Content-Length': fileSize,
+            'Content-Type': 'video/mp4',
+          };
+          res.writeHead(200, head);
+          fs.createReadStream(videoPath).pipe(res);
+        }
+      } catch (error) {
+        throw new ProcessingError(`Failed to serve video file: ${error.message}`, id, "file_serving");
+      }
+    }));
+
+    this.router.get("/tmp/:filename", 
+      PathTraversalGuard.middleware(['filename']),
+      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { filename } = req.params;
+      
+      if (!filename) {
+        throw new ValidationError("Filename is required");
+      }
+      
+      // Security: prevent path traversal attacks
+      if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        throw new ValidationError("Invalid filename format");
+      }
+      
+      const audioPath = path.join(this.config.tempDirPath, filename);
+
+      if (!fs.existsSync(audioPath)) {
+        throw new NotFoundError("Audio file", filename);
+      }
+
+      try {
+        const stat = fs.statSync(audioPath);
+        const fileSize = stat.size;
+
         const head = {
           'Content-Length': fileSize,
-          'Content-Type': 'video/mp4',
+          'Content-Type': 'audio/wav',
         };
         res.writeHead(200, head);
-        fs.createReadStream(videoPath).pipe(res);
+        fs.createReadStream(audioPath).pipe(res);
+      } catch (error) {
+        throw new ProcessingError(`Failed to serve audio file: ${error.message}`, undefined, "file_serving");
       }
-    });
+    }));
 
-    this.router.get("/tmp/:filename", (req, res) => {
+    this.router.get("/temp/:filename", 
+      PathTraversalGuard.middleware(['filename']),
+      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const { filename } = req.params;
+      
+      if (!filename) {
+        throw new ValidationError("Filename is required");
+      }
+      
+      // Security: prevent path traversal attacks
+      if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        throw new ValidationError("Invalid filename format");
+      }
+      
       const audioPath = path.join(this.config.tempDirPath, filename);
 
       if (!fs.existsSync(audioPath)) {
-        logger.error({ audioPath }, "Audio file not found");
-        return res.status(404).json({ error: "Audio file not found" });
+        throw new NotFoundError("Audio file", filename);
       }
 
-      const stat = fs.statSync(audioPath);
-      const fileSize = stat.size;
+      try {
+        const stat = fs.statSync(audioPath);
+        const fileSize = stat.size;
 
-      const head = {
-        'Content-Length': fileSize,
-        'Content-Type': 'audio/wav',
-      };
-      res.writeHead(200, head);
-      fs.createReadStream(audioPath).pipe(res);
-    });
-
-    this.router.get("/temp/:filename", (req, res) => {
-      const { filename } = req.params;
-      const audioPath = path.join(this.config.tempDirPath, filename);
-
-      if (!fs.existsSync(audioPath)) {
-        logger.error({ audioPath }, "Audio file not found");
-        return res.status(404).json({ error: "Audio file not found" });
+        const head = {
+          'Content-Length': fileSize,
+          'Content-Type': 'audio/wav',
+        };
+        res.writeHead(200, head);
+        fs.createReadStream(audioPath).pipe(res);
+      } catch (error) {
+        throw new ProcessingError(`Failed to serve audio file: ${error.message}`, undefined, "file_serving");
       }
-
-      const stat = fs.statSync(audioPath);
-      const fileSize = stat.size;
-
-      const head = {
-        'Content-Length': fileSize,
-        'Content-Type': 'audio/wav',
-      };
-      res.writeHead(200, head);
-      fs.createReadStream(audioPath).pipe(res);
-    });
+    }));
 
     this.router.get("/cached-video/:filename", (req, res) => {
       const { filename } = req.params;
@@ -520,57 +625,57 @@ export class APIRouter {
       }
     });
 
-    this.router.post("/generate-tts", async (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const { text, voice = "Paulo", language = "pt", referenceAudioPath } = req.body;
-        
-        logger.info({ text, voice, language }, "TTS request received");
-        
-        if (!text || typeof text !== 'string' || !text.trim()) {
-          return res.status(400).json({ error: "Text is required" });
-        }
-
-        // Criar um ID temporário para a geração do TTS
-        const tempId = `tts_${Date.now()}`;
-        const sceneId = `scene_${Date.now()}`;
-        
-        // Configuração para o TTS
-        const config: RenderConfig = {
-          voice: voice as VoiceEnum,
-          language: language as "pt" | "en",
-          referenceAudioPath: referenceAudioPath || undefined
-        };
-
-        // Gerar o áudio usando o método do ShortCreator
-        const audioResult = await this.shortCreator.generateSingleTTSAndUpdate(
-          tempId,
-          sceneId,
-          text.trim(),
-          config,
-          false
-        );
-
-        // Extrair o nome do arquivo do caminho
-        const filename = path.basename(audioResult.audioUrl);
-
-        res.status(200).json({
-          filename,
-          duration: audioResult.duration,
-          url: `/api/temp/${filename}`,
-          text: text.trim()
-        });
-      } catch (error) {
-        logger.error({ error }, "Error generating TTS");
-        res.status(500).json({
-          error: "Failed to generate TTS audio",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+    this.router.post("/generate-tts",
+      validateRequest(validationSchemas.ttsRequest),
+      APIKeyValidator.requireApiKeys(['openai']),
+      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { text, voice = "Paulo", language = "pt", referenceAudioPath } = req.body;
+      
+      logger.info({ text, voice, language }, "TTS request received");
+      
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        throw new ValidationError("Text is required and must be a non-empty string");
       }
-    });
+      
+      if (text.trim().length > 1000) {
+        throw new ValidationError("Text must be 1000 characters or less");
+      }
 
-    this.router.use('/music', express.static(path.join(process.cwd(), 'static/music')));
-    this.router.use('/overlays', express.static(path.join(process.cwd(), 'static/overlays')));
-    this.router.use('/fonts', express.static(path.join(process.cwd(), 'fonts')));
+      // Criar um ID temporário para a geração do TTS
+      const tempId = `tts_${Date.now()}`;
+      const sceneId = `scene_${Date.now()}`;
+      
+      // Configuração para o TTS
+      const config: RenderConfig = {
+        voice: voice as VoiceEnum,
+        language: language as "pt" | "en",
+        referenceAudioPath: referenceAudioPath || undefined
+      };
+
+      const audioResult = await this.shortCreator.generateSingleTTSAndUpdate(
+        tempId,
+        sceneId,
+        text.trim(),
+        config,
+        false
+      );
+
+      if (!audioResult || !audioResult.audioUrl) {
+        throw new ProcessingError("Failed to generate TTS audio", tempId, "tts_generation");
+      }
+
+      // Extrair o nome do arquivo do caminho
+      const filename = path.basename(audioResult.audioUrl);
+
+      ResponseFormatter.success(res, {
+        filename,
+        duration: audioResult.duration,
+        url: `/api/temp/${filename}`,
+        text: text.trim()
+      });
+    }));
+
+    // Static routes moved to main server.ts to avoid conflicts with error handling
 
     const proxyOptions: Options = {
       target: this.config.remotion.rendering.serveUrl,
@@ -611,18 +716,10 @@ export class APIRouter {
       }
     });
 
-    this.router.get("/cache/stats", (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const stats = this.shortCreator.getCacheStats();
-        res.status(200).json(stats);
-      } catch (error) {
-        logger.error({ error }, "Error getting cache stats");
-          res.status(500).json({
-          error: "Failed to get cache stats",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    });
+    this.router.get("/cache/stats", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const stats = this.shortCreator.getCacheStats();
+      ResponseFormatter.success(res, stats);
+    }));
 
     this.router.post("/cache/cleanup", async (req: ExpressRequest, res: ExpressResponse) => {
       try {
@@ -643,34 +740,39 @@ export class APIRouter {
     });
 
     // Endpoint para buscar vídeos de fundo
-    this.router.post("/search-background-videos", async (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const { query, count = 5, orientation = "portrait", excludeIds = [] } = req.body;
-        
-        if (!query || typeof query !== 'string') {
-          return res.status(400).json({ error: "Search query is required" });
-        }
-
-        const videos = await this.shortCreator.searchVideos(query);
-        
-        // Filtrar e limitar resultados
-        const filteredVideos = videos
-          .filter((video: any) => !excludeIds.includes(video.id))
-          .slice(0, count);
-
-        res.status(200).json({ 
-          videos: filteredVideos,
-          query,
-          count: filteredVideos.length
-        });
-      } catch (error) {
-        logger.error({ error }, "Error searching background videos");
-        res.status(500).json({
-          error: "Failed to search background videos",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+    this.router.post("/search-background-videos",
+      validateRequest(validationSchemas.searchQuery),
+      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const { query, count = 5, orientation = "portrait", excludeIds = [] } = req.body;
+      
+      if (!query || typeof query !== 'string' || !query.trim()) {
+        throw new ValidationError("Search query is required and must be a non-empty string");
       }
-    });
+      
+      const parsedCount = parseInt(count, 10);
+      if (isNaN(parsedCount) || parsedCount < 1 || parsedCount > 50) {
+        throw new ValidationError("Count must be a number between 1 and 50");
+      }
+      
+      if (!Array.isArray(excludeIds)) {
+        throw new ValidationError("excludeIds must be an array");
+      }
+
+      const videos = await this.shortCreator.searchVideos(query.trim());
+      
+      // Filtrar e limitar resultados
+      const filteredVideos = videos
+        .filter((video: any) => !excludeIds.includes(video.id))
+        .slice(0, parsedCount);
+
+      ResponseFormatter.success(res, {
+        videos: filteredVideos,
+        query: query.trim(),
+        count: filteredVideos.length,
+        orientation,
+        excludeIds: excludeIds.length
+      });
+    }));
 
     // Endpoint para substituir vídeo em uma cena específica
     this.router.post("/replace-scene-video", async (req: ExpressRequest, res: ExpressResponse) => {
@@ -791,34 +893,26 @@ export class APIRouter {
     });
 
     // Endpoint para estatísticas do dashboard
-    this.router.get("/dashboard/stats", async (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const videos = await this.shortCreator.getAllVideos();
-        
-        const stats = {
-          totalVideos: videos.length,
-          completedVideos: videos.filter((v: any) => v.status === 'ready').length,
-          processingVideos: videos.filter((v: any) => v.status === 'processing').length,
-          failedVideos: videos.filter((v: any) => v.status === 'failed').length,
-          pendingVideos: videos.filter((v: any) => v.status === 'pending').length,
-          todayVideos: videos.filter((v: any) => {
-            const today = new Date().toDateString();
-            return new Date(v.createdAt || Date.now()).toDateString() === today;
-          }).length,
-          totalDuration: videos.reduce((total: number, video: any) => {
-            return total + (video.duration || 0);
-          }, 0)
-        };
+    this.router.get("/dashboard/stats", asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+      const videos = await this.shortCreator.getAllVideos();
+      
+      const stats = {
+        totalVideos: videos.length,
+        completedVideos: videos.filter((v: any) => v.status === 'ready').length,
+        processingVideos: videos.filter((v: any) => v.status === 'processing').length,
+        failedVideos: videos.filter((v: any) => v.status === 'failed').length,
+        pendingVideos: videos.filter((v: any) => v.status === 'pending').length,
+        todayVideos: videos.filter((v: any) => {
+          const today = new Date().toDateString();
+          return new Date(v.createdAt || Date.now()).toDateString() === today;
+        }).length,
+        totalDuration: videos.reduce((total: number, video: any) => {
+          return total + (video.duration || 0);
+        }, 0)
+      };
 
-        res.status(200).json(stats);
-      } catch (error) {
-        logger.error({ error }, "Error getting dashboard stats");
-        res.status(500).json({
-          error: "Failed to get dashboard stats",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    });
+      ResponseFormatter.success(res, stats);
+    }));
 
     // AI Service Configuration
     const geminiClient = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
@@ -1339,8 +1433,53 @@ Try this approach and let me know your results in the comments!
       await videoProxy(req, res);
     });
 
+    // Secure file upload endpoint
+    this.router.post("/upload", 
+      secureFileUpload.array('files', 5), // Maximum 5 files
+      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
+        try {
+          const files = req.files as Express.Multer.File[];
+          
+          if (!files || files.length === 0) {
+            throw new ValidationError("No files uploaded");
+          }
+
+          const uploadedFiles = files.map(file => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            path: file.path,
+            size: file.size,
+            mimetype: file.mimetype,
+            url: `/api/uploads/${file.filename}`
+          }));
+
+          logger.info({ 
+            uploadCount: files.length, 
+            totalSize: files.reduce((sum, f) => sum + f.size, 0) 
+          }, "Files uploaded successfully");
+
+          res.status(200).json({
+            message: "Files uploaded successfully",
+            files: uploadedFiles
+          });
+        } catch (error) {
+          logger.error({ error }, "File upload error");
+          throw error;
+        }
+      })
+    );
+
     // Video search configuration routes
     const { videoSearchConfigRouter } = require("../routes/videoSearchConfig");
     this.router.use("/video-search", videoSearchConfigRouter);
+
+    // Translation routes
+    if (this.translationService && this.transcriptionService) {
+      initializeTranslationRoutes(this.translationService, this.transcriptionService);
+      this.router.use("/translation", translationRoutes);
+      logger.info('Translation routes initialized');
+    } else {
+      logger.warn('Translation service not available, skipping translation routes');
+    }
   }
 }

@@ -32,6 +32,7 @@ import {
   Refresh as RefreshIcon,
   SmartToy as AIIcon,
   Delete as DeleteIcon,
+  Error as ErrorIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -48,15 +49,17 @@ interface DashboardStats {
 interface RecentVideo {
   id: string;
   status: string;
-  progress?: number;
-  stage?: string;
-  createdAt: string;
-  scenes?: any[];
+  title?: string;
+  createdAt?: string;
+  thumbnail?: string;
+  duration?: number;
 }
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalVideos: 0,
     completedVideos: 0,
@@ -66,7 +69,6 @@ const Dashboard: React.FC = () => {
     todayVideos: 0,
   });
   const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
-  const [loading, setLoading] = useState(true);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
@@ -79,6 +81,7 @@ const Dashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await axios.get('/api/videos');
       const videos = response.data;
 
@@ -93,12 +96,17 @@ const Dashboard: React.FC = () => {
         new Date(v.createdAt || Date.now()).toDateString() === today
       ).length;
 
+      // Calculate total duration from completed videos
+      const totalDuration = videos
+        .filter((v: any) => v.status === 'ready' && v.duration)
+        .reduce((sum: number, v: any) => sum + (v.duration || 0), 0);
+
       setStats({
         totalVideos,
         completedVideos,
         processingVideos,
         failedVideos,
-        totalDuration: 0, // TODO: Calculate based on video data
+        totalDuration,
         todayVideos,
       });
 
@@ -107,8 +115,9 @@ const Dashboard: React.FC = () => {
         .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
         .slice(0, 5);
       setRecentVideos(recent);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
+      setError(error.response?.data?.message || 'Erro ao carregar dados. Verifique se o servidor está rodando.');
     } finally {
       setLoading(false);
     }
@@ -230,6 +239,35 @@ const Dashboard: React.FC = () => {
     },
   ];
 
+  // Show error state
+  if (error && !loading) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '60vh',
+        gap: 2 
+      }}>
+        <ErrorIcon sx={{ fontSize: 64, color: theme.palette.error.main }} />
+        <Typography variant="h5" color="error">
+          Erro ao carregar dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={fetchDashboardData}
+          startIcon={<RefreshIcon />}
+        >
+          Tentar Novamente
+        </Button>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       {/* Header */}
@@ -257,290 +295,283 @@ const Dashboard: React.FC = () => {
             </Button>
           </Box>
         </Box>
-        <Typography variant="body1" color="text.secondary">
-          Bem-vindo ao seu estúdio de criação de vídeos curtos com IA
+        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+          Visão geral da sua produção de vídeos
         </Typography>
       </Box>
 
-      {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {statCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card
-              elevation={0}
-              sx={{
-                background: card.gradient,
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: '100px',
-                  height: '100px',
-                  background: `radial-gradient(circle, ${alpha('#fff', 0.2)}, transparent)`,
-                  borderRadius: '50%',
-                  transform: 'translate(30px, -30px)',
-                },
-              }}
-            >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Avatar
-                    sx={{
-                      backgroundColor: alpha('#fff', 0.2),
-                      color: 'white',
-                    }}
-                  >
-                    {card.icon}
-                  </Avatar>
-                  <Typography variant="h4" component="div" sx={{ fontWeight: 700 }}>
-                    {loading ? '...' : card.value}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  {card.title}
-                </Typography>
-              </CardContent>
-            </Card>
+      {loading && !error ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          {/* Stats Grid */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            {statCards.map((stat, index) => (
+              <Grid item xs={12} sm={6} md={3} key={index}>
+                <Card
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    height: '100%',
+                    background: alpha(stat.color, 0.05),
+                    border: `1px solid ${alpha(stat.color, 0.1)}`,
+                    transition: 'all 0.3s',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: `0 12px 24px ${alpha(stat.color, 0.15)}`,
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                        {stat.title}
+                      </Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color }}>
+                        {stat.value}
+                      </Typography>
+                    </Box>
+                    <Avatar
+                      sx={{
+                        background: stat.gradient,
+                        width: 56,
+                        height: 56,
+                      }}
+                    >
+                      {stat.icon}
+                    </Avatar>
+                  </Box>
+                </Card>
+              </Grid>
+            ))}
           </Grid>
-        ))}
-      </Grid>
 
-      <Grid container spacing={3}>
-        {/* Quick Actions */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              height: 'fit-content',
-              background: `linear-gradient(145deg, ${theme.palette.background.paper}, ${alpha(theme.palette.primary.main, 0.05)})`,
-              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            }}
-          >
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+          {/* Quick Actions */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
               Ações Rápidas
             </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                startIcon={<AddIcon />}
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Chip
+                icon={<AddIcon />}
+                label="Criar Vídeo Manual"
                 onClick={() => navigate('/studio')}
-                sx={{ justifyContent: 'flex-start', py: 1.5 }}
-              >
-                Criar Novo Vídeo
-              </Button>
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                startIcon={<AIIcon />}
+                sx={{
+                  py: 2.5,
+                  px: 1,
+                  fontSize: '0.875rem',
+                  background: alpha(theme.palette.primary.main, 0.1),
+                  '&:hover': {
+                    background: alpha(theme.palette.primary.main, 0.2),
+                  },
+                }}
+              />
+              <Chip
+                icon={<AIIcon />}
+                label="Gerar com IA"
                 onClick={() => navigate('/ai-scripts')}
-                sx={{ justifyContent: 'flex-start', py: 1.5 }}
-              >
-                Gerar Script com IA
-              </Button>
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                startIcon={<VideoIcon />}
-                onClick={() => navigate('/library')}
-                sx={{ justifyContent: 'flex-start', py: 1.5 }}
-              >
-                Ver Biblioteca
-              </Button>
+                sx={{
+                  py: 2.5,
+                  px: 1,
+                  fontSize: '0.875rem',
+                  background: alpha(theme.palette.secondary.main, 0.1),
+                  '&:hover': {
+                    background: alpha(theme.palette.secondary.main, 0.2),
+                  },
+                }}
+              />
             </Box>
-          </Paper>
-        </Grid>
+          </Box>
 
-        {/* Recent Videos */}
-        <Grid item xs={12} md={8}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              background: `linear-gradient(145deg, ${theme.palette.background.paper}, ${alpha(theme.palette.primary.main, 0.05)})`,
-              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            }}
-          >
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+          {/* Recent Videos */}
+          <Box>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
               Vídeos Recentes
             </Typography>
-            
-            {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <LinearProgress sx={{ width: '100%' }} />
-              </Box>
-            ) : recentVideos.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <VideoIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                <Typography color="text.secondary" sx={{ mb: 2 }}>
-                  Nenhum vídeo encontrado
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => navigate('/studio')}
-                >
-                  Criar Primeiro Vídeo
-                </Button>
-              </Box>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {recentVideos.map((video) => (
-                  <Card
-                    key={video.id}
+            <Grid container spacing={2}>
+              {recentVideos.length === 0 ? (
+                <Grid item xs={12}>
+                  <Paper
                     elevation={0}
                     sx={{
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      p: 4,
+                      textAlign: 'center',
+                      background: alpha(theme.palette.background.paper, 0.5),
                       border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: `0 4px 20px ${alpha(theme.palette.primary.main, 0.15)}`,
-                      },
                     }}
-                    onClick={() => navigate(`/video/${video.id}`)}
                   >
-                    <CardContent sx={{ p: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                          <Avatar
-                            sx={{
-                              backgroundColor: alpha(getStatusColor(video.status), 0.2),
-                              color: getStatusColor(video.status),
-                            }}
-                          >
-                            <VideoIcon />
-                          </Avatar>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                              Vídeo {video.id.substring(0, 8)}...
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatRelativeTime(video.createdAt)}
-                            </Typography>
-                          </Box>
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <VideoIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      Nenhum vídeo encontrado
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Comece criando seu primeiro vídeo
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      startIcon={<AddIcon />}
+                      onClick={() => navigate('/studio')}
+                    >
+                      Criar Vídeo
+                    </Button>
+                  </Paper>
+                </Grid>
+              ) : (
+                recentVideos.map((video) => (
+                  <Grid item xs={12} key={video.id}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        background: alpha(theme.palette.background.paper, 0.5),
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                        '&:hover': {
+                          background: alpha(theme.palette.action.hover, 0.1),
+                          transform: 'translateX(8px)',
+                        },
+                      }}
+                      onClick={() => navigate(`/video/${video.id}`)}
+                    >
+                      <Avatar
+                        variant="rounded"
+                        sx={{
+                          width: 80,
+                          height: 60,
+                          background: alpha(theme.palette.primary.main, 0.1),
+                        }}
+                      >
+                        {video.thumbnail ? (
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title || 'Video thumbnail'}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <VideoIcon />
+                        )}
+                      </Avatar>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                          {video.title || `Vídeo ${video.id.slice(0, 8)}`}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0.5 }}>
                           <Chip
                             label={getStatusText(video.status)}
                             size="small"
                             sx={{
-                              backgroundColor: alpha(getStatusColor(video.status), 0.2),
+                              backgroundColor: alpha(getStatusColor(video.status), 0.1),
                               color: getStatusColor(video.status),
                               fontWeight: 600,
                             }}
                           />
-                          {video.status === 'processing' && video.progress && (
-                            <Box sx={{ minWidth: 60 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                {video.progress}%
-                              </Typography>
-                            </Box>
-                          )}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            {video.status === 'ready' && (
-                              <IconButton size="small" color="primary">
-                                <PlayIcon />
-                              </IconButton>
-                            )}
-                            <IconButton 
-                              size="small" 
-                              color="error"
-                              onClick={(e) => handleDeleteClick(video.id, e)}
-                              disabled={deletingVideoId === video.id}
-                              sx={{
-                                '&:hover': {
-                                  backgroundColor: alpha(theme.palette.error.main, 0.1),
-                                }
-                              }}
-                            >
-                              {deletingVideoId === video.id ? (
-                                <CircularProgress size={16} color="error" />
-                              ) : (
-                                <DeleteIcon />
-                              )}
-                            </IconButton>
-                          </Box>
-                        </Box>
-                      </Box>
-                      
-                      {video.status === 'processing' && video.progress && (
-                        <Box sx={{ mt: 2 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={video.progress}
-                            sx={{
-                              height: 6,
-                              borderRadius: 3,
-                              backgroundColor: alpha(theme.palette.primary.main, 0.2),
-                              '& .MuiLinearProgress-bar': {
-                                borderRadius: 3,
-                                background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-                              },
-                            }}
-                          />
-                          {video.stage && (
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                              {video.stage}
+                          {video.createdAt && (
+                            <Typography variant="caption" color="text.secondary">
+                              {formatRelativeTime(video.createdAt)}
                             </Typography>
                           )}
                         </Box>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        {video.status === 'ready' && (
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/video/${video.id}`);
+                            }}
+                          >
+                            <PlayIcon />
+                          </IconButton>
+                        )}
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => handleDeleteClick(video.id, e)}
+                          disabled={deletingVideoId === video.id}
+                        >
+                          {deletingVideoId === video.id ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <DeleteIcon />
+                          )}
+                        </IconButton>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))
+              )}
+            </Grid>
+          </Box>
+
+          {/* Activity Progress */}
+          {stats.processingVideos > 0 && (
+            <Box sx={{ mt: 4 }}>
+              <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+                Processamento Ativo
+              </Typography>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  background: alpha(theme.palette.warning.main, 0.05),
+                  border: `1px solid ${alpha(theme.palette.warning.main, 0.1)}`,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <CircularProgress size={20} sx={{ mr: 2 }} />
+                  <Typography variant="body1">
+                    {stats.processingVideos} vídeo{stats.processingVideos > 1 ? 's' : ''} sendo processado{stats.processingVideos > 1 ? 's' : ''}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="indeterminate"
+                  sx={{
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: alpha(theme.palette.warning.main, 0.1),
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: theme.palette.warning.main,
+                      borderRadius: 4,
+                    },
+                  }}
+                />
+              </Paper>
+            </Box>
+          )}
+        </>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            backgroundColor: theme.palette.background.paper,
-            backgroundImage: 'none',
-          }
-        }}
+        maxWidth="xs"
+        fullWidth
       >
-        <DialogTitle>
-          Confirmar Exclusão
-        </DialogTitle>
+        <DialogTitle>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Tem certeza que deseja deletar este vídeo? Esta ação não pode ser desfeita.
+            Tem certeza que deseja excluir este vídeo? Esta ação não pode ser desfeita.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button 
-            onClick={() => {
-              setDeleteDialogOpen(false);
-              setVideoToDelete(null);
-            }}
-            disabled={deletingVideoId !== null}
-          >
+          <Button onClick={() => setDeleteDialogOpen(false)}>
             Cancelar
           </Button>
           <Button 
-            onClick={handleDeleteConfirm}
-            color="error"
+            onClick={handleDeleteConfirm} 
+            color="error" 
             variant="contained"
-            disabled={deletingVideoId !== null}
-            startIcon={deletingVideoId !== null ? <CircularProgress size={16} /> : <DeleteIcon />}
+            disabled={!!deletingVideoId}
           >
-            {deletingVideoId !== null ? 'Deletando...' : 'Deletar'}
+            {deletingVideoId ? 'Excluindo...' : 'Excluir'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -550,7 +581,6 @@ const Dashboard: React.FC = () => {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert 
           onClose={() => setSnackbar({ ...snackbar, open: false })} 
@@ -564,4 +594,4 @@ const Dashboard: React.FC = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

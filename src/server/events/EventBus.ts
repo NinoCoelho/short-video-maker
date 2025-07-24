@@ -38,9 +38,49 @@ export interface SceneProcessingEvent {
   timestamp: string;
 }
 
+// Download event type definitions
+export interface DownloadProgressEvent {
+  jobId: string;
+  videoId: string;
+  progress: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  speed: number;
+  eta: number;
+  timestamp: string;
+}
+
+export interface DownloadStatusEvent {
+  jobId: string;
+  videoId: string;
+  status: string;
+  message?: string;
+  timestamp: string;
+}
+
+export interface DownloadCompleteEvent {
+  jobId: string;
+  videoId: string;
+  filePath: string;
+  fileSize: number;
+  duration: number;
+  timestamp: string;
+}
+
+export interface DownloadErrorEvent {
+  jobId: string;
+  videoId: string;
+  error: string;
+  retries: number;
+  willRetry: boolean;
+  timestamp: string;
+}
+
 // Event Bus class using singleton pattern
 export class EventBus extends EventEmitter {
   private static instance: EventBus;
+  private listenerTracker: WeakMap<any, Set<string>> = new WeakMap();
+  private videoListeners: Map<string, Set<Function>> = new Map();
 
   private constructor() {
     super();
@@ -62,8 +102,11 @@ export class EventBus extends EventEmitter {
     });
   }
 
-  public onVideoStatusUpdate(listener: (event: VideoStatusUpdateEvent) => void): void {
+  public onVideoStatusUpdate(listener: (event: VideoStatusUpdateEvent) => void, videoId?: string): void {
     this.on('video:status:update', listener);
+    if (videoId) {
+      this.trackListener(videoId, listener);
+    }
   }
 
   // Video processing progress events
@@ -74,8 +117,11 @@ export class EventBus extends EventEmitter {
     });
   }
 
-  public onVideoProcessingProgress(listener: (event: VideoProcessingProgressEvent) => void): void {
+  public onVideoProcessingProgress(listener: (event: VideoProcessingProgressEvent) => void, videoId?: string): void {
     this.on('video:processing:progress', listener);
+    if (videoId) {
+      this.trackListener(videoId, listener);
+    }
   }
 
   // Video completion events
@@ -86,8 +132,11 @@ export class EventBus extends EventEmitter {
     });
   }
 
-  public onVideoCompleted(listener: (event: VideoCompletedEvent) => void): void {
+  public onVideoCompleted(listener: (event: VideoCompletedEvent) => void, videoId?: string): void {
     this.on('video:completed', listener);
+    if (videoId) {
+      this.trackListener(videoId, listener);
+    }
   }
 
   // Video error events
@@ -98,8 +147,11 @@ export class EventBus extends EventEmitter {
     });
   }
 
-  public onVideoError(listener: (event: VideoErrorEvent) => void): void {
+  public onVideoError(listener: (event: VideoErrorEvent) => void, videoId?: string): void {
     this.on('video:error', listener);
+    if (videoId) {
+      this.trackListener(videoId, listener);
+    }
   }
 
   // Scene processing events
@@ -114,17 +166,93 @@ export class EventBus extends EventEmitter {
     this.on('scene:processing', listener);
   }
 
+  // Download progress events
+  public emitDownloadProgress(event: DownloadProgressEvent): void {
+    this.emit('download:progress', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
+  }
+
+  public onDownloadProgress(listener: (event: DownloadProgressEvent) => void): void {
+    this.on('download:progress', listener);
+  }
+
+  // Download status events
+  public emitDownloadStatus(event: DownloadStatusEvent): void {
+    this.emit('download:status', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
+  }
+
+  public onDownloadStatus(listener: (event: DownloadStatusEvent) => void): void {
+    this.on('download:status', listener);
+  }
+
+  // Download complete events
+  public emitDownloadComplete(event: DownloadCompleteEvent): void {
+    this.emit('download:complete', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
+  }
+
+  public onDownloadComplete(listener: (event: DownloadCompleteEvent) => void): void {
+    this.on('download:complete', listener);
+  }
+
+  // Download error events
+  public emitDownloadError(event: DownloadErrorEvent): void {
+    this.emit('download:error', {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString()
+    });
+  }
+
+  public onDownloadError(listener: (event: DownloadErrorEvent) => void): void {
+    this.on('download:error', listener);
+  }
+
   // Generic event methods
   public removeAllListenersForVideo(videoId: string): void {
     // Remove all listeners for a specific video
-    const events = ['video:status:update', 'video:processing:progress', 'video:completed', 'video:error', 'scene:processing'];
-    events.forEach(eventName => {
-      const listeners = this.listeners(eventName);
-      listeners.forEach(listener => {
-        // Note: This is a simple implementation. In practice, you might want to track listeners by videoId
-        // For now, we'll rely on the WebSocket server to manage subscriptions
+    const listeners = this.videoListeners.get(videoId);
+    if (listeners) {
+      const events = ['video:status:update', 'video:processing:progress', 'video:completed', 'video:error', 'scene:processing'];
+      events.forEach(eventName => {
+        listeners.forEach(listener => {
+          this.removeListener(eventName, listener);
+        });
       });
-    });
+      this.videoListeners.delete(videoId);
+    }
+  }
+
+  // Track listeners for proper cleanup
+  private trackListener(videoId: string, listener: Function): void {
+    if (!this.videoListeners.has(videoId)) {
+      this.videoListeners.set(videoId, new Set());
+    }
+    this.videoListeners.get(videoId)!.add(listener);
+  }
+
+  // Enhanced cleanup methods
+  public cleanup(): void {
+    this.removeAllListeners();
+    this.videoListeners.clear();
+  }
+
+  // Cleanup listeners older than specified time
+  public cleanupStaleListeners(maxAgeMs: number = 30 * 60 * 1000): void { // 30 minutes default
+    const now = Date.now();
+    for (const [videoId, listeners] of this.videoListeners.entries()) {
+      // Clean up listeners for videos that haven't been active recently
+      // This is a simple heuristic - in practice you might track timestamps
+      if (listeners.size === 0) {
+        this.videoListeners.delete(videoId);
+      }
+    }
   }
 }
 

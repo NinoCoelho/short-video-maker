@@ -48,6 +48,7 @@ export const sceneInput = z.object({
   videos: z.array(z.string()).optional().describe("Pre-defined video URLs to be used for the scene, bypassing search."),
   audio: z.object({ url: z.string(), duration: z.number() }).optional().describe("Pre-defined audio to be used for the scene, bypassing TTS."),
   captions: z.array(z.any()).optional().describe("Pre-defined captions for the scene."),
+  forceRegenerate: z.boolean().optional().describe("Force regeneration of audio for this scene."),
 });
 export type SceneInput = z.infer<typeof sceneInput>;
 
@@ -228,7 +229,7 @@ export type MusicData = {
 };
 
 export type ShortVideoData = {
-  scenes: any[]; // Definir um tipo mais específico se possível
+  scenes: Scene[];
   music: {
     file: string;
     url: string;
@@ -239,3 +240,172 @@ export type ShortVideoData = {
   };
   config: VideoConfig;
 }
+
+// Import-related types from video-import-feature.md
+export interface ImportedVideo extends Video {
+  sourceUrl: string;
+  sourcePlatform: 'youtube' | 'facebook' | 'instagram' | 'tiktok' | 'other';
+  originalDuration: number;
+  originalResolution: { width: number; height: number };
+  transcription?: Transcription;
+  highlights?: Highlight[];
+  segments?: ImportVideoSegment[];
+}
+
+export interface Transcription {
+  text: string;
+  language: string;
+  timestamps: TranscriptionSegment[];
+}
+
+export interface TranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+  confidence?: number;
+}
+
+export interface Highlight {
+  id: string;
+  start: number;
+  end: number;
+  score: number;
+  reason: string;
+  tags: string[];
+}
+
+export interface ImportVideoSegment {
+  id: string;
+  parentVideoId: string;
+  start: number;
+  end: number;
+  title?: string;
+  orientation: OrientationEnum;
+  cropConfig?: CropConfig;
+  transcription?: TranscriptionSegment[];
+}
+
+export interface CropConfig {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  trackSubject: boolean;
+  subjectBounds?: { x: number; y: number; width: number; height: number }[];
+}
+
+export interface ImportSettings {
+  targetLanguage: string;
+  music?: MusicMoodEnum;
+  overlay?: string;
+  orientation: OrientationEnum;
+  autoHighlights: boolean;
+  maxSegmentDuration: number; // in seconds
+  minSegmentDuration: number; // in seconds
+}
+
+// Additional types for video processing
+
+export interface VideoData extends ShortVideoData {
+  id?: string;
+  status?: VideoStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EditedVideoData {
+  scenes?: Scene[];
+  config?: RenderConfig;
+  changes?: VideoChange[];
+}
+
+export interface VideoChange {
+  type: 'scene-edit' | 'scene-audio' | 'scene-video' | 'config-change';
+  sceneId?: string;
+  field?: string;
+  oldValue?: unknown;
+  newValue?: unknown;
+  timestamp: string;
+}
+
+export interface VideoChanges {
+  hasChanges: boolean;
+  textChanges: Array<{
+    sceneId: string;
+    oldText: string;
+    newText: string;
+  }>;
+  videoChanges: Array<{
+    sceneId: string;
+    oldVideoUrl: string;
+    newVideoUrl: string;
+  }>;
+  configChanges: Array<{
+    field: string;
+    oldValue: unknown;
+    newValue: unknown;
+  }>;
+}
+
+export interface RegenerateOptions {
+  forceRegenerate?: boolean;
+  preserveTimings?: boolean;
+  updateOnlyChanged?: boolean;
+}
+
+export interface ProcessingOptions {
+  skipValidation?: boolean;
+  forceReprocess?: boolean;
+  preserveCache?: boolean;
+}
+
+export interface UrlAnalysis {
+  type: 'youtube' | 'generic';
+  title: string;
+  duration: number;
+  resolution: string | { width: number; height: number };
+  thumbnail?: string;
+  format: string;
+  videoCodec: string;
+  audioCodec: string;
+  fileSize?: number;
+  fps?: number;
+  canDownload: boolean;
+  platform: string;
+  hasSubtitles?: boolean;
+  language?: string;
+}
+
+export interface FFprobeStream {
+  codec_type: 'video' | 'audio';
+  codec_name: string;
+  width?: number;
+  height?: number;
+  r_frame_rate?: string;
+  duration?: string;
+}
+
+export interface FFprobeFormat {
+  duration?: string;
+  format_name?: string;
+  size?: string;
+  tags?: {
+    title?: string;
+    [key: string]: string | undefined;
+  };
+}
+
+export interface FFprobeInfo {
+  streams: FFprobeStream[];
+  format: FFprobeFormat;
+}
+
+// Re-export existing types for convenience
+export type { VideoStatusObject, ImportStage, SubJobStatus } from '../short-creator/VideoStatusManager';
+export type { VideoSegment, VideoMetadata as VideoFileMetadata, SegmentOptions } from '../services/VideoSegmentService';
+
+// Legacy compatibility - keeping old type name
+export type VideoStatus = "pending" | "processing" | "ready" | "failed";
+
+// Add VideoMetadata as alias for VideoData for compatibility
+export type VideoMetadata = VideoData;

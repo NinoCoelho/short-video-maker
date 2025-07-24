@@ -17,6 +17,7 @@ import VideoEditor from './pages/VideoEditor';
 import VideoDetails from './pages/VideoDetails';
 import Settings from './pages/Settings';
 import ApiDocumentation from './pages/ApiDocumentation';
+import VideoImporter from './pages/VideoImporter';
 
 // Create theme
 const theme = createTheme({
@@ -122,6 +123,7 @@ const App: React.FC = () => {
               <Route path="/tts" element={<TTSStudio />} />
               <Route path="/video/:id" element={<VideoDetails />} />
               <Route path="/edit/:id" element={<VideoEditor />} />
+              <Route path="/import" element={<VideoImporter />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/api-docs" element={<ApiDocumentation />} />
             </Routes>

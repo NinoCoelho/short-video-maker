@@ -21,6 +21,7 @@ import {
   getOverlayUrl,
   getVideoUrl,
   resolveUrl,
+  parseImportedVideoUrl,
 } from "../../shared/utils";
 import { fontFamily } from "./fonts";
 
@@ -415,16 +416,53 @@ export const PortraitVideo: FC<Props> = ({
               alignItems: 'center',
               overflow: 'hidden'
             }}>
-              <OffthreadVideo 
-                src={scene.videos[0]} 
-                muted 
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  opacity: getVideoOpacity(frame)
-                }}
-              />
+              {(() => {
+                const videoUrl = scene.videos[0];
+                const importedVideoData = parseImportedVideoUrl(videoUrl);
+                
+                // Enhanced video rendering for imported videos
+                if (importedVideoData && importedVideoData.crop) {
+                  const { crop } = importedVideoData;
+                  
+                  return (
+                    <div style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: '100%',
+                      overflow: 'hidden'
+                    }}>
+                      <OffthreadVideo 
+                        src={videoUrl} 
+                        muted 
+                        style={{
+                          position: 'absolute',
+                          // Apply crop transformation
+                          left: `${-crop.x * (100 / crop.width)}%`,
+                          top: `${-crop.y * (100 / crop.height)}%`,
+                          width: `${100 * (1 / (crop.width / 100))}%`,
+                          height: `${100 * (1 / (crop.height / 100))}%`,
+                          opacity: getVideoOpacity(frame),
+                          objectFit: 'cover',
+                        }}
+                      />
+                    </div>
+                  );
+                } else {
+                  // Standard video rendering for regular videos
+                  return (
+                    <OffthreadVideo 
+                      src={videoUrl} 
+                      muted 
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        opacity: getVideoOpacity(frame)
+                      }}
+                    />
+                  );
+                }
+              })()}
             </div>
             <Audio src={audio.url} />
             {pages.map((page, j) => {

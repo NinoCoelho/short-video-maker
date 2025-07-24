@@ -5,7 +5,7 @@ import fs from "fs/promises";
 import axios, { AxiosError } from "axios";
 // @ts-ignore
 import fetch from "node-fetch";
-import { FFMpeg } from "./FFmpeg";
+import { FFmpeg } from "./FFmpeg";
 import FormData from "form-data";
 import { cleanSceneText, splitTextByPunctuation } from "../utils/textCleaner";
 import ffmpeg from "fluent-ffmpeg";
@@ -13,16 +13,16 @@ import ffmpeg from "fluent-ffmpeg";
 export class LocalTTS {
   private readonly serviceUrl: string;
   private outputDir: string;
-  private ffmpeg: FFMpeg;
+  private ffmpeg: FFmpeg;
 
-  constructor(private config: Config, ffmpeg: FFMpeg, outputDir: string = "output/audio") {
+  constructor(private config: Config, ffmpeg: FFmpeg, outputDir: string = "output/audio") {
     this.serviceUrl = "http://localhost:5003";
     this.outputDir = outputDir;
     this.ffmpeg = ffmpeg;
   }
 
   static async init(config: Config): Promise<LocalTTS> {
-    const ffmpeg = await FFMpeg.init();
+    const ffmpeg = await FFmpeg.init();
     return new LocalTTS(config, ffmpeg);
   }
 

@@ -6,6 +6,7 @@ import z from "zod";
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { logger } from "../../logger";
 import { renderConfig, sceneInput } from "../../types/shorts";
+import { NotFoundError, ProcessingError, ValidationError } from "../errors/AppError";
 
 export class MCPRouter {
   router: express.Router;
@@ -42,7 +43,16 @@ export class MCPRouter {
       },
       async ({ videoId }) => {
         try {
+          if (!videoId || typeof videoId !== 'string') {
+            throw new ValidationError("Video ID is required and must be a string");
+          }
+
           const statusObject = await this.shortCreator.status(videoId);
+          
+          if (!statusObject) {
+            throw new NotFoundError("Video", videoId);
+          }
+          
           let statusText = `Status: ${statusObject.status}`;
           
           if (statusObject.progress) {
@@ -70,6 +80,20 @@ export class MCPRouter {
             ],
           };
         } catch (error) {
+          logger.error({ error, videoId }, "Error in MCP get-video-status tool");
+          
+          if (error instanceof ValidationError || error instanceof NotFoundError) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error: ${error.message}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+          
           return {
             content: [
               {
@@ -77,6 +101,7 @@ export class MCPRouter {
                 text: `Error getting video status: ${error instanceof Error ? error.message : 'Unknown error'}`,
               },
             ],
+            isError: true,
           };
         }
       },

@@ -417,8 +417,9 @@ export class MusicManager {
    * Get music URL using port-agnostic resolution
    */
   private getMusicUrl(filename: string): string {
-    // For music URLs, we need absolute URLs for Remotion context
-    return `http://localhost:${this.config.port}/api/music/${encodeURIComponent(filename)}`;
+    // Return just the relative path - will be resolved based on context
+    // Note: Server serves music at /music/, not /api/music/
+    return `/music/${encodeURIComponent(filename)}`;
   }
   private musicFileExist(music: Music): boolean {
     return fs.existsSync(path.join(this.config.musicDirPath, music.file));

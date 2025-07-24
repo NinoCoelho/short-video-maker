@@ -1,6 +1,6 @@
 import { Config } from "../config";
 import { logger } from "../logger";
-import { FFMpeg } from "../short-creator/libraries/FFmpeg";
+import { FFmpeg } from "../short-creator/libraries/FFmpeg";
 import { Remotion } from "../short-creator/libraries/Remotion";
 import { LocalTTS } from "../short-creator/libraries/LocalTTS";
 

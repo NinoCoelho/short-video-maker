@@ -291,18 +291,27 @@ export class VideoProviderFacade implements VideoProvider {
       throw new Error(`Rate limit exceeded for ${providerName}`);
     }
 
-    return Promise.race([
-      // Use findVideos instead of searchVideos to properly handle excludeIds
-      provider.findVideos(context.searchTerms, context.duration, context.excludeIds, context.orientation, count).then(videos => ({
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error(`Timeout for ${providerName}`)), timeout)
+    );
+
+    const searchPromise = async () => {
+      const videos = await provider.findVideos(
+        context.searchTerms, 
+        context.duration, 
+        context.excludeIds, 
+        context.orientation, 
+        count
+      );
+      return {
         videos,
         provider: providerName,
         searchTerms: context.searchTerms,
         searchTime: Date.now()
-      })),
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error(`Timeout for ${providerName}`)), timeout)
-      )
-    ]);
+      };
+    };
+
+    return Promise.race([searchPromise(), timeoutPromise]);
   }
 
   private getAvailableProviders(searchTerms: string[]): string[] {

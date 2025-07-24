@@ -34,7 +34,13 @@ export function useWebSocket(url?: string, options: WebSocketOptions = {}) {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const reconnectAttemptRef = useRef(0);
 
-  const socketUrl = url || `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+  // Determine the WebSocket URL based on environment
+  // In development, connect directly to the backend server port
+  // In production, use the same port as the frontend
+  const isDevelopment = import.meta.env.DEV;
+  const backendPort = isDevelopment ? '3233' : window.location.port;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socketUrl = url || `${protocol}//${window.location.hostname}:${backendPort}`;
 
   const connect = useCallback(() => {
     if (state.socket?.connected) {

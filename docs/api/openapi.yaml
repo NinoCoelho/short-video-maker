@@ -1,0 +1,1036 @@
+openapi: 3.0.3
+info:
+  title: Short Video Maker Import API
+  description: |
+    Comprehensive video import API for analyzing, downloading, processing, and segmenting videos from various sources.
+    
+    Features:
+    - Video analysis from YouTube, TikTok, Instagram, Facebook, and direct URLs
+    - AI-powered content analysis and segmentation
+    - Real-time progress updates via WebSocket
+    - Multi-language translation support
+    - Ollama local AI integration
+    
+    This API enables importing long-form videos and converting them into short-form content suitable for TikTok, Instagram Reels, and YouTube Shorts.
+  version: 1.0.0
+  contact:
+    name: Short Video Maker Support
+    url: https://github.com/your-repo/short-video-maker
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3233/api
+    description: Development server
+  - url: https://your-domain.com/api
+    description: Production server
+
+tags:
+  - name: Import
+    description: Video import operations
+  - name: Ollama
+    description: Local AI analysis using Ollama
+  - name: Translation
+    description: Multi-language translation services
+  - name: WebSocket
+    description: Real-time updates via WebSocket
+
+paths:
+  /import/analyze:
+    post:
+      tags: [Import]
+      summary: Analyze video URL
+      description: |
+        Analyze a video URL to extract metadata without downloading the video.
+        Supports YouTube, TikTok, Instagram, Facebook, and direct video URLs.
+      operationId: analyzeVideo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequest'
+            examples:
+              youtube_analysis:
+                summary: YouTube video analysis
+                value:
+                  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                  options:
+                    includeTranscript: true
+                    detectSegments: true
+                    analyzeContent: true
+              tiktok_analysis:
+                summary: TikTok video analysis
+                value:
+                  url: "https://www.tiktok.com/@username/video/1234567890"
+                  options:
+                    includeTranscript: false
+                    detectSegments: true
+      responses:
+        '200':
+          description: Analysis completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+              examples:
+                successful_analysis:
+                  summary: Successful video analysis
+                  value:
+                    success: true
+                    metadata:
+                      title: "Rick Astley - Never Gonna Give You Up"
+                      duration: 213
+                      format: "mp4"
+                      resolution: "1920x1080"
+                      fileSize: 52428800
+                      fps: 30
+                      codec: "h264"
+                      audioCodec: "aac"
+                      thumbnail: "/api/thumbnail/abc123.jpg"
+                      canDownload: true
+                      estimatedProcessingTime: 42
+                      platform: "youtube"
+                      sourceUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                    analyzedAt: "2024-07-22T10:30:00.000Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /import/process:
+    post:
+      tags: [Import]
+      summary: Start video import process
+      description: |
+        Begin full video import with configurable processing pipeline.
+        This is an asynchronous operation that returns a job ID for tracking progress.
+      operationId: processImport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessImportRequest'
+            examples:
+              basic_import:
+                summary: Basic import with default settings
+                value:
+                  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+              advanced_import:
+                summary: Advanced import with custom configuration
+                value:
+                  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                  config:
+                    segmentDetection:
+                      method: "ai-analysis"
+                      threshold: 0.7
+                    contentAnalysis:
+                      extractKeywords: true
+                      generateSummary: true
+                      detectHighlights: true
+                    translation:
+                      enabled: true
+                      targetLanguage: "es"
+                      preserveOriginal: true
+      responses:
+        '202':
+          description: Import process started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessImportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /import/{jobId}/status:
+    get:
+      tags: [Import]
+      summary: Get import job status
+      description: Monitor import job progress and retrieve current status information.
+      operationId: getImportStatus
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: UUID of the import job
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Import status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /import/{jobId}/segments:
+    get:
+      tags: [Import]
+      summary: Get video segments
+      description: Retrieve detected video segments after import completion.
+      operationId: getVideoSegments
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: UUID of the import job
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Segments retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SegmentsResponse'
+        '400':
+          description: Segments not available (import not completed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Segments not available"
+                details: "Import job must be completed before segments are available"
+                status: "processing"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags: [Import]
+      summary: Update video segments
+      description: Modify segment boundaries, titles, descriptions, and keywords.
+      operationId: updateVideoSegments
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: UUID of the import job
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSegmentsRequest'
+      responses:
+        '200':
+          description: Segments updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateSegmentsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /import/{jobId}/highlights:
+    post:
+      tags: [Import]
+      summary: Detect video highlights
+      description: Use AI to identify the best segments for short-form content creation.
+      operationId: detectHighlights
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: UUID of the import job
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HighlightsRequest'
+            examples:
+              tiktok_highlights:
+                summary: TikTok-focused highlights
+                value:
+                  prompt: "Find the most engaging moments suitable for TikTok"
+                  maxHighlights: 3
+                  minDuration: 15
+                  criteria: ["engagement", "visual-appeal", "hook-potential"]
+              general_highlights:
+                summary: General highlights
+                value:
+                  maxHighlights: 5
+                  criteria: ["engagement", "visual-quality", "audio-clarity"]
+      responses:
+        '200':
+          description: Highlights detected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HighlightsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /ollama/analyze:
+    post:
+      tags: [Ollama]
+      summary: Analyze content with Ollama
+      description: |
+        Perform AI analysis using local Ollama models for content understanding, 
+        summarization, and keyword extraction.
+      operationId: analyzeWithOllama
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OllamaAnalysisRequest'
+            examples:
+              content_summarization:
+                summary: Content summarization
+                value:
+                  content: "This is a tutorial about cooking pasta. First, boil water in a large pot..."
+                  prompt: "Summarize this cooking tutorial and extract key steps"
+                  model: "llama2"
+                  options:
+                    temperature: 0.7
+                    maxTokens: 500
+              keyword_extraction:
+                summary: Keyword extraction
+                value:
+                  content: "Video transcript about digital marketing strategies..."
+                  prompt: "Extract main keywords and topics from this content"
+                  model: "mistral"
+      responses:
+        '200':
+          description: Analysis completed (or fallback response if Ollama unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OllamaAnalysisResponse'
+              examples:
+                successful_analysis:
+                  summary: Successful analysis
+                  value:
+                    success: true
+                    analysis: "This cooking tutorial covers pasta preparation with key steps: 1. Boil water, 2. Add salt, 3. Cook pasta..."
+                    model: "llama2"
+                    totalDuration: 1250
+                    promptEvalCount: 45
+                    analyzedAt: "2024-07-22T10:30:00.000Z"
+                ollama_unavailable:
+                  summary: Ollama service unavailable
+                  value:
+                    success: false
+                    error: "Ollama service not available"
+                    analysis: "Please ensure Ollama is running and the specified model is available"
+                    model: "unavailable"
+                    details: "Connection refused to localhost:11434"
+                    fallback: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /translation/languages:
+    get:
+      tags: [Translation]
+      summary: Get supported languages
+      description: Retrieve list of supported languages for translation services.
+      operationId: getSupportedLanguages
+      responses:
+        '200':
+          description: Supported languages retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationLanguagesResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /translation/translate:
+    post:
+      tags: [Translation]
+      summary: Translate text
+      description: |
+        Translate text using multiple providers (OpenAI, Google, DeepL) with automatic
+        fallback and alternative suggestions.
+      operationId: translateText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateRequest'
+            examples:
+              auto_detect:
+                summary: Auto-detect source language
+                value:
+                  text: "Hello, how are you today?"
+                  targetLanguage: "es"
+              specific_source:
+                summary: Specify source language
+                value:
+                  text: "Bonjour, comment allez-vous?"
+                  sourceLanguage: "fr"
+                  targetLanguage: "en"
+      responses:
+        '200':
+          description: Translation completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    AnalyzeRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Video URL to analyze
+          example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        options:
+          type: object
+          properties:
+            includeTranscript:
+              type: boolean
+              description: Extract transcript if available
+              default: false
+            detectSegments:
+              type: boolean
+              description: Provide segment suggestions
+              default: false
+            analyzeContent:
+              type: boolean
+              description: Perform content analysis
+              default: false
+
+    AnalyzeResponse:
+      type: object
+      required: [success, metadata, url, analyzedAt]
+      properties:
+        success:
+          type: boolean
+          example: true
+        metadata:
+          $ref: '#/components/schemas/VideoMetadata'
+        url:
+          type: string
+          format: uri
+          example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        analyzedAt:
+          type: string
+          format: date-time
+          example: "2024-07-22T10:30:00.000Z"
+
+    VideoMetadata:
+      type: object
+      properties:
+        title:
+          type: string
+          example: "Rick Astley - Never Gonna Give You Up"
+        duration:
+          type: number
+          description: Duration in seconds
+          example: 213
+        format:
+          type: string
+          example: "mp4"
+        resolution:
+          type: string
+          example: "1920x1080"
+        fileSize:
+          type: number
+          description: File size in bytes
+          example: 52428800
+        fps:
+          type: number
+          example: 30
+        codec:
+          type: string
+          example: "h264"
+        audioCodec:
+          type: string
+          example: "aac"
+        thumbnail:
+          type: string
+          example: "/api/thumbnail/abc123.jpg"
+        canDownload:
+          type: boolean
+          example: true
+        estimatedProcessingTime:
+          type: number
+          description: Estimated processing time in seconds
+          example: 42
+        platform:
+          type: string
+          enum: [youtube, tiktok, instagram, facebook, url, unknown]
+          example: "youtube"
+        sourceUrl:
+          type: string
+          format: uri
+          example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        transcript:
+          type: string
+          description: Video transcript (if available)
+        language:
+          type: string
+          description: Detected language code
+          example: "en"
+        hasClosedCaptions:
+          type: boolean
+          example: true
+        suggestedSegments:
+          type: array
+          items:
+            type: object
+            properties:
+              startTime:
+                type: number
+              endTime:
+                type: number
+              confidence:
+                type: number
+                minimum: 0
+                maximum: 1
+
+    ProcessImportRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Video URL to import
+        config:
+          $ref: '#/components/schemas/ImportConfig'
+
+    ImportConfig:
+      type: object
+      properties:
+        segmentDetection:
+          type: object
+          properties:
+            method:
+              type: string
+              enum: [scene-change, transcript, ai-analysis, fixed-duration]
+              description: Segmentation method
+              default: "scene-change"
+            threshold:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Detection threshold (0-1)
+              default: 0.5
+            duration:
+              type: number
+              minimum: 5
+              maximum: 300
+              description: Fixed duration for fixed-duration method
+              default: 30
+        contentAnalysis:
+          type: object
+          properties:
+            extractKeywords:
+              type: boolean
+              default: true
+            generateSummary:
+              type: boolean
+              default: false
+            detectHighlights:
+              type: boolean
+              default: true
+        translation:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            targetLanguage:
+              type: string
+              description: Target language code (ISO 639-1)
+              example: "es"
+            preserveOriginal:
+              type: boolean
+              description: Keep original text along with translation
+              default: true
+
+    ProcessImportResponse:
+      type: object
+      required: [success, jobId, message, statusUrl]
+      properties:
+        success:
+          type: boolean
+          example: true
+        jobId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        message:
+          type: string
+          example: "Import process started"
+        statusUrl:
+          type: string
+          example: "/api/import/550e8400-e29b-41d4-a716-446655440000/status"
+
+    ImportStatusResponse:
+      type: object
+      required: [id, url, status, progress, segmentCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum: [pending, analyzing, downloading, processing, segmenting, completed, failed]
+          description: Current import job status
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Progress percentage
+        metadata:
+          $ref: '#/components/schemas/VideoMetadata'
+        segmentCount:
+          type: number
+          description: Number of detected segments
+        error:
+          type: string
+          description: Error message if status is failed
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    VideoSegment:
+      type: object
+      required: [id, startTime, endTime]
+      properties:
+        id:
+          type: string
+          example: "seg-1"
+        startTime:
+          type: number
+          description: Start time in seconds
+          example: 0
+        endTime:
+          type: number
+          description: End time in seconds
+          example: 60
+        title:
+          type: string
+          example: "Introduction"
+        description:
+          type: string
+          example: "Video introduction and setup"
+        keywords:
+          type: array
+          items:
+            type: string
+          example: ["intro", "welcome", "overview"]
+
+    SegmentsResponse:
+      type: object
+      required: [segments, metadata]
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoSegment'
+        metadata:
+          type: object
+          properties:
+            totalDuration:
+              type: number
+            segmentCount:
+              type: number
+
+    UpdateSegmentsRequest:
+      type: object
+      required: [segments]
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoSegment'
+
+    UpdateSegmentsResponse:
+      type: object
+      required: [success, message, segments]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoSegment'
+
+    HighlightsRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+          description: Custom prompt for highlight detection
+          example: "Find the most engaging moments suitable for TikTok"
+        maxHighlights:
+          type: number
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: Maximum number of highlights to return
+        minDuration:
+          type: number
+          minimum: 5
+          maximum: 60
+          default: 15
+          description: Minimum duration for highlights in seconds
+        criteria:
+          type: array
+          items:
+            type: string
+          description: Criteria for highlight detection
+          example: ["engagement", "visual-quality", "audio-clarity"]
+
+    VideoHighlight:
+      type: object
+      required: [segmentId, startTime, endTime, score, reason, suggestedTitle]
+      properties:
+        segmentId:
+          type: string
+          example: "seg-2"
+        startTime:
+          type: number
+          example: 60
+        endTime:
+          type: number
+          example: 90
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Highlight quality score
+          example: 0.87
+        reason:
+          type: string
+          example: "High engagement potential with clear audio and visual content"
+        suggestedTitle:
+          type: string
+          example: "Best Part - Tutorial Highlight"
+
+    HighlightsResponse:
+      type: object
+      required: [highlights, criteria, totalAnalyzed]
+      properties:
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoHighlight'
+        criteria:
+          type: array
+          items:
+            type: string
+        totalAnalyzed:
+          type: number
+          description: Total number of segments analyzed
+
+    OllamaAnalysisRequest:
+      type: object
+      required: [content, prompt]
+      properties:
+        content:
+          type: string
+          description: Content to analyze
+          example: "This is a tutorial about cooking pasta..."
+        prompt:
+          type: string
+          description: Analysis prompt
+          example: "Summarize this content and extract key points"
+        model:
+          type: string
+          default: "llama2"
+          description: Ollama model to use
+        options:
+          type: object
+          properties:
+            temperature:
+              type: number
+              minimum: 0
+              maximum: 2
+              default: 0.7
+            maxTokens:
+              type: number
+              minimum: 1
+              maximum: 2000
+              default: 500
+
+    OllamaAnalysisResponse:
+      type: object
+      required: [success, analysis, model, analyzedAt]
+      properties:
+        success:
+          type: boolean
+        analysis:
+          type: string
+          description: Analysis result or error message
+        model:
+          type: string
+        totalDuration:
+          type: number
+          description: Processing time in milliseconds
+        promptEvalCount:
+          type: number
+          description: Number of tokens in prompt
+        analyzedAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+          description: Error message if analysis failed
+        fallback:
+          type: boolean
+          description: True if this is a fallback response
+
+    TranslationLanguage:
+      type: object
+      required: [code, name, nativeName]
+      properties:
+        code:
+          type: string
+          description: ISO 639-1 language code
+          example: "es"
+        name:
+          type: string
+          description: English name of the language
+          example: "Spanish"
+        nativeName:
+          type: string
+          description: Native name of the language
+          example: "Español"
+
+    TranslationLanguagesResponse:
+      type: object
+      required: [languages, defaultSource, defaultTarget]
+      properties:
+        languages:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranslationLanguage'
+        defaultSource:
+          type: string
+          example: "auto"
+        defaultTarget:
+          type: string
+          example: "en"
+
+    TranslateRequest:
+      type: object
+      required: [text, targetLanguage]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Text to translate
+          example: "Hello, how are you today?"
+        targetLanguage:
+          type: string
+          minLength: 2
+          description: Target language code (ISO 639-1)
+          example: "es"
+        sourceLanguage:
+          type: string
+          description: Source language code (auto-detect if not provided)
+          example: "en"
+
+    TranslationResult:
+      type: object
+      required: [translatedText, sourceLanguage, targetLanguage, confidence, alternatives]
+      properties:
+        translatedText:
+          type: string
+          example: "Hola, ¿cómo estás hoy?"
+        sourceLanguage:
+          type: string
+          example: "en"
+        targetLanguage:
+          type: string
+          example: "es"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.98
+        alternatives:
+          type: array
+          items:
+            type: string
+          example: ["Hola, ¿cómo te encuentras hoy?", "Hola, ¿qué tal estás hoy?"]
+        provider:
+          type: string
+          example: "openai"
+
+    TranslateResponse:
+      type: object
+      required: [success, translation, translatedAt]
+      properties:
+        success:
+          type: boolean
+        translation:
+          $ref: '#/components/schemas/TranslationResult'
+        translatedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+        code:
+          type: string
+          description: Error code for programmatic handling
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalid_url:
+              summary: Invalid URL format
+              value:
+                error: "Invalid request data"
+                details: "URL must be a valid URL format"
+                code: "INVALID_URL"
+            validation_error:
+              summary: Request validation failed
+              value:
+                error: "Invalid request data"
+                details: "Request body validation failed"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Import job not found"
+            code: "JOB_NOT_FOUND"
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per hour
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when rate limit resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before next request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Rate limit exceeded"
+            details: "Too many requests. Please wait before making another request."
+            code: "RATE_LIMIT_EXCEEDED"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            analysis_failed:
+              summary: Video analysis failed
+              value:
+                error: "Failed to analyze video"
+                details: "Unable to extract video metadata"
+                code: "ANALYSIS_FAILED"
+            processing_error:
+              summary: Processing error
+              value:
+                error: "Internal server error"
+                details: "An unexpected error occurred during processing"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication (when required)
+
+# Currently no security is required, but this is defined for future use
+security: []
+
+# WebSocket documentation (not part of OpenAPI spec but documented here)
+# WebSocket URL: ws://localhost:3233
+# Events:
+# - Client -> Server:
+#   - subscribe-import: Subscribe to import job updates
+#   - unsubscribe-import: Unsubscribe from import job
+#   - ping: Health check
+# - Server -> Client:
+#   - import-progress: Import progress updates
+#   - import-complete: Import completed
+#   - import-error: Import failed
+#   - download-progress: Download progress updates
+#   - pong: Health check response

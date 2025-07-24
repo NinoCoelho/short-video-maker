@@ -32,6 +32,7 @@ import {
   Notifications as NotificationsIcon,
   Search as SearchIcon,
   Add as AddIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 280;
@@ -62,6 +63,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       icon: <StudioIcon />,
       path: '/studio',
       description: 'Criar novos vídeos',
+      isNew: true,
+    },
+    {
+      text: 'Import Video',
+      icon: <UploadIcon />,
+      path: '/import',
+      description: 'Importar vídeos externos',
       isNew: true,
     },
     {
@@ -150,6 +158,19 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 color: 'white',
                 '&:hover': {
                   background: theme.palette.primary.dark,
+                },
+              }}
+            />
+            <Chip
+              icon={<UploadIcon />}
+              label="Importar"
+              size="small"
+              onClick={() => navigate('/import')}
+              sx={{
+                background: theme.palette.secondary.main,
+                color: 'white',
+                '&:hover': {
+                  background: theme.palette.secondary.dark,
                 },
               }}
             />

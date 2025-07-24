@@ -41,7 +41,12 @@ var config_1 = require("./src/config");
 var LocalTTS_1 = require("./src/short-creator/libraries/LocalTTS");
 // Exibe a versão do Python que o Node vai usar
 try {
-    var pythonVersion = (0, child_process_1.execSync)("python --version", { encoding: "utf-8" });
+    var pythonVersionResult = (0, child_process_1.spawnSync)("python", ["--version"], { encoding: "utf-8" });
+    if (pythonVersionResult.error) {
+        throw pythonVersionResult.error;
+    }
+    // Python sometimes outputs version to stderr instead of stdout
+    var pythonVersion = pythonVersionResult.stdout || pythonVersionResult.stderr;
     console.log("Versão do Python usada pelo Node:", pythonVersion.trim());
 }
 catch (err) {

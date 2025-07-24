@@ -14,6 +14,27 @@ export interface VideoStatusObject {
   startedAt?: string;
   completedAt?: string;
   estimatedTimeRemaining?: number;
+  // Import-specific fields
+  importStage?: ImportStage;
+  subJobs?: SubJobStatus[];
+  aggregatedProgress?: number;
+}
+
+export enum ImportStage {
+  DOWNLOADING = "downloading",
+  TRANSCRIBING = "transcribing", 
+  ANALYZING = "analyzing",
+  SEGMENTING = "segmenting",
+  CONVERTING = "converting",
+  RENDERING = "rendering"
+}
+
+export interface SubJobStatus {
+  id: string;
+  type: 'segment' | 'transcription' | 'analysis';
+  progress: number;
+  stage: string;
+  error?: string;
 }
 
 export class VideoStatusManager {
@@ -260,5 +281,170 @@ export class VideoStatusManager {
       // Release write lock
       this.writeLocks.delete(videoId);
     }
+  }
+
+  // Import-specific status management methods
+
+  public async setImportStage(
+    videoId: string, 
+    importStage: ImportStage, 
+    progress?: number, 
+    message?: string
+  ): Promise<void> {
+    const filePath = this.getStatusFilePath(videoId);
+    
+    // Wait for any ongoing writes to complete
+    await this.waitForWriteLock(videoId);
+    
+    // Acquire write lock
+    this.writeLocks.add(videoId);
+    
+    try {
+      let currentData: VideoStatusObject = { status: 'processing' };
+      
+      // Try to read existing data safely
+      const existingData = await this.safeReadJson(filePath);
+      if (existingData) {
+        currentData = existingData;
+      }
+
+      const data: VideoStatusObject = { 
+        ...currentData,
+        status: 'processing',
+        importStage,
+        progress: progress !== undefined ? Math.min(100, Math.max(0, progress)) : currentData.progress,
+        stage: importStage,
+        message
+      };
+
+      await this.safeWriteJson(filePath, data);
+      logger.info({ videoId, importStage, progress, message }, "Import stage updated.");
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error";
+      logger.error({ videoId, importStage, error: errorMessage }, "Failed to update import stage.");
+    } finally {
+      // Release write lock
+      this.writeLocks.delete(videoId);
+    }
+  }
+
+  public async updateSubJob(
+    videoId: string, 
+    subJobId: string, 
+    type: 'segment' | 'transcription' | 'analysis',
+    progress: number,
+    stage: string,
+    error?: string
+  ): Promise<void> {
+    const filePath = this.getStatusFilePath(videoId);
+    
+    // Wait for any ongoing writes to complete
+    await this.waitForWriteLock(videoId);
+    
+    // Acquire write lock
+    this.writeLocks.add(videoId);
+    
+    try {
+      let currentData: VideoStatusObject = { status: 'processing' };
+      
+      // Try to read existing data safely
+      const existingData = await this.safeReadJson(filePath);
+      if (existingData) {
+        currentData = existingData;
+      }
+
+      // Initialize or update sub-jobs array
+      const subJobs = currentData.subJobs || [];
+      const existingJobIndex = subJobs.findIndex(job => job.id === subJobId);
+
+      const subJob: SubJobStatus = {
+        id: subJobId,
+        type,
+        progress: Math.min(100, Math.max(0, progress)),
+        stage,
+        error
+      };
+
+      if (existingJobIndex >= 0) {
+        subJobs[existingJobIndex] = subJob;
+      } else {
+        subJobs.push(subJob);
+      }
+
+      // Calculate aggregated progress from all sub-jobs
+      const aggregatedProgress = subJobs.reduce((acc, job) => acc + job.progress, 0) / subJobs.length;
+
+      const data: VideoStatusObject = { 
+        ...currentData,
+        subJobs,
+        aggregatedProgress: Math.round(aggregatedProgress),
+        progress: Math.round(aggregatedProgress)
+      };
+
+      await this.safeWriteJson(filePath, data);
+      logger.debug({ 
+        videoId, 
+        subJobId, 
+        type, 
+        progress, 
+        stage,
+        aggregatedProgress: data.aggregatedProgress 
+      }, "Sub-job updated.");
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error";
+      logger.error({ videoId, subJobId, error: errorMessage }, "Failed to update sub-job.");
+    } finally {
+      // Release write lock
+      this.writeLocks.delete(videoId);
+    }
+  }
+
+  public async transitionToRenderPipeline(videoId: string): Promise<void> {
+    const filePath = this.getStatusFilePath(videoId);
+    
+    // Wait for any ongoing writes to complete
+    await this.waitForWriteLock(videoId);
+    
+    // Acquire write lock
+    this.writeLocks.add(videoId);
+    
+    try {
+      let currentData: VideoStatusObject = { status: 'processing' };
+      
+      // Try to read existing data safely
+      const existingData = await this.safeReadJson(filePath);
+      if (existingData) {
+        currentData = existingData;
+      }
+
+      const data: VideoStatusObject = { 
+        ...currentData,
+        importStage: ImportStage.RENDERING,
+        stage: 'Transitioning to render pipeline',
+        message: 'Import completed, starting video rendering'
+      };
+
+      await this.safeWriteJson(filePath, data);
+      logger.info({ videoId }, "Transitioned import to render pipeline.");
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error";
+      logger.error({ videoId, error: errorMessage }, "Failed to transition to render pipeline.");
+    } finally {
+      // Release write lock
+      this.writeLocks.delete(videoId);
+    }
+  }
+
+  public async getImportStatus(videoId: string): Promise<{
+    importStage?: ImportStage;
+    subJobs: SubJobStatus[];
+    aggregatedProgress: number;
+  }> {
+    const status = await this.getStatus(videoId);
+    return {
+      importStage: status.importStage,
+      subJobs: status.subJobs || [],
+      aggregatedProgress: status.aggregatedProgress || 0
+    };
   }
 } 

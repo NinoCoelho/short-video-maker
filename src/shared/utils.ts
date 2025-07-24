@@ -8,6 +8,7 @@ import {
   VoiceEnum,
 } from "../types/shorts";
 import { AvailableComponentsEnum, type OrientationConfig } from "../types/shorts";
+import logger from "../logger";
 
 export const shortVideoSchema = z.object({
   scenes: z.array(
@@ -65,7 +66,7 @@ export function createCaptionPages({
   lineCount: number;
   maxDistanceMs: number;
 }) {
-  console.log('[createCaptionPages] Input captions:', captions.map((c, i) => ({
+  logger.debug('[createCaptionPages] Input captions:', captions.map((c, i) => ({
     index: i,
     text: c.text,
     startMs: c.startMs,
@@ -93,7 +94,7 @@ export function createCaptionPages({
     const validStartMs = isNaN(startMs) ? 0 : Math.max(0, startMs);
     const validEndMs = isNaN(endMs) ? Math.max(validStartMs + 100, 100) : Math.max(endMs, validStartMs + 100);
 
-    console.log(`[createCaptionPages] Caption ${i}:`, {
+    logger.debug(`[createCaptionPages] Caption ${i}:`, {
       text: caption.text,
       originalStartMs: caption.startMs,
       originalEndMs: caption.endMs,
@@ -173,7 +174,7 @@ export function createCaptionPages({
     pages.push(currentPage);
   }
 
-  console.log('[createCaptionPages] Final pages:', pages.map((page, i) => ({
+  logger.debug('[createCaptionPages] Final pages:', pages.map((page, i) => ({
     pageIndex: i,
     startMs: page.startMs,
     endMs: page.endMs,
@@ -288,4 +289,91 @@ export function getVideoUrl(url: string): string {
   }
   // Para URLs externas, use o proxy.
   return `/api/proxy?src=${encodeURIComponent(url)}`;
+}
+
+/**
+ * Enhanced video URL handling for imported videos with crop and transformation support
+ * Supports imported video segments with crop configurations and aspect ratio handling
+ */
+export function getImportedVideoUrl(
+  url: string, 
+  options?: {
+    crop?: { x: number; y: number; width: number; height: number };
+    start?: number;
+    end?: number;
+    orientation?: 'portrait' | 'landscape' | 'square';
+    preserveQuality?: boolean;
+  }
+): string {
+  if (!url) return '';
+  
+  // Handle imported video URLs with segment parameters
+  if (url.startsWith('/api/imported-video/')) {
+    // Already processed imported video URL - return as is
+    return url;
+  }
+  
+  // For regular URLs, check if they need import processing
+  if (url.startsWith('/') || url.startsWith('file://')) {
+    return url;
+  }
+  
+  // For external URLs, use proxy but check for import parameters in URL
+  if (options && (options.crop || options.start !== undefined || options.end !== undefined)) {
+    // This is an imported video with processing parameters
+    const params = new URLSearchParams();
+    
+    if (options.start !== undefined) params.append('start', options.start.toString());
+    if (options.end !== undefined) params.append('end', options.end.toString());
+    if (options.crop) params.append('crop', JSON.stringify(options.crop));
+    if (options.orientation) params.append('orientation', options.orientation);
+    if (options.preserveQuality) params.append('preserveQuality', 'true');
+    
+    return `/api/imported-video-proxy?src=${encodeURIComponent(url)}&${params.toString()}`;
+  }
+  
+  // Regular external video
+  return `/api/proxy?src=${encodeURIComponent(url)}`;
+}
+
+/**
+ * Parse imported video URL to extract crop and timing parameters
+ * Returns null if not an imported video URL
+ */
+export function parseImportedVideoUrl(url: string): {
+  videoId?: string;
+  start?: number;
+  end?: number;
+  crop?: { x: number; y: number; width: number; height: number };
+  orientation?: 'portrait' | 'landscape' | 'square';
+  preserveQuality?: boolean;
+} | null {
+  if (!url.startsWith('/api/imported-video/')) {
+    return null;
+  }
+  
+  try {
+    const urlObj = new URL(url, 'http://localhost');
+    const pathParts = urlObj.pathname.split('/');
+    const videoId = pathParts[3]; // /api/imported-video/{videoId}
+    
+    const result: any = { videoId };
+    
+    const start = urlObj.searchParams.get('start');
+    const end = urlObj.searchParams.get('end');
+    const crop = urlObj.searchParams.get('crop');
+    const orientation = urlObj.searchParams.get('orientation');
+    const preserveQuality = urlObj.searchParams.get('preserveQuality');
+    
+    if (start !== null) result.start = parseFloat(start);
+    if (end !== null) result.end = parseFloat(end);
+    if (crop) result.crop = JSON.parse(crop);
+    if (orientation) result.orientation = orientation;
+    if (preserveQuality === 'true') result.preserveQuality = true;
+    
+    return result;
+  } catch (error) {
+    logger.warn('Failed to parse imported video URL:', { url, error });
+    return null;
+  }
 }

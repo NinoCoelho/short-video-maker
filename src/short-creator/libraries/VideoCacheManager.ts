@@ -263,17 +263,18 @@ export class VideoCacheManager {
     const downloadPromises = validUrls.map(async (url) => {
       try {
         // Check if already cached
-        if (this.cachedVideos.has(url)) {
-          const cached = this.cachedVideos.get(url)!;
+        const existingCache = this.cachedVideos.get(url);
+        if (existingCache) {
           // Verify file still exists
-          if (fs.existsSync(cached.localPath)) {
+          if (fs.existsSync(existingCache.localPath)) {
             logger.debug({ url }, "Video already cached");
-            results.set(url, cached);
+            results.set(url, existingCache);
             return;
           } else {
             // Remove from cache if file doesn't exist
-            logger.warn({ url, cachedPath: cached.localPath }, "Cached file no longer exists, removing from cache");
+            logger.warn({ url, cachedPath: existingCache.localPath }, "Cached file no longer exists, removing from cache");
             this.cachedVideos.delete(url);
+            this.currentCacheSize -= existingCache.size;
           }
         }
 
