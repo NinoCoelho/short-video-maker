@@ -3,8 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import Joi from 'joi';
 import rateLimit from 'express-rate-limit';
-import multer from 'multer';
 import { logger } from '../../logger';
+import { VoiceEnum } from '../../types/shorts';
 
 /**
  * Path Traversal Protection Utility
@@ -306,108 +306,6 @@ export class APIKeyValidator {
   }
 }
 
-/**
- * File Upload Security Configuration
- */
-export const secureFileUpload = multer({
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
-    files: 5, // Maximum 5 files per request
-    fields: 20, // Maximum 20 form fields
-    fieldNameSize: 100, // Maximum field name size
-    fieldSize: 1024 * 1024 // 1MB field value size
-  },
-  fileFilter: (req, file, cb) => {
-    try {
-      // Allowed file types
-      const allowedTypes = [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'audio/mpeg',
-        'audio/wav',
-        'audio/ogg',
-        'video/mp4',
-        'video/webm',
-        'video/ogg',
-        'application/json',
-        'text/plain'
-      ];
-      
-      if (!allowedTypes.includes(file.mimetype)) {
-        logger.warn({ 
-          filename: file.originalname, 
-          mimetype: file.mimetype 
-        }, 'File type not allowed');
-        return cb(new Error('File type not allowed'));
-      }
-      
-      // Check file extension matches MIME type
-      const ext = path.extname(file.originalname).toLowerCase();
-      const mimeTypeMap: Record<string, string[]> = {
-        'image/jpeg': ['.jpg', '.jpeg'],
-        'image/png': ['.png'],
-        'image/gif': ['.gif'],
-        'image/webp': ['.webp'],
-        'audio/mpeg': ['.mp3'],
-        'audio/wav': ['.wav'],
-        'audio/ogg': ['.ogg'],
-        'video/mp4': ['.mp4'],
-        'video/webm': ['.webm'],
-        'video/ogg': ['.ogv'],
-        'application/json': ['.json'],
-        'text/plain': ['.txt']
-      };
-      
-      const expectedExtensions = mimeTypeMap[file.mimetype];
-      if (expectedExtensions && !expectedExtensions.includes(ext)) {
-        logger.warn({ 
-          filename: file.originalname, 
-          mimetype: file.mimetype, 
-          extension: ext 
-        }, 'File extension does not match MIME type');
-        return cb(new Error('File extension does not match content type'));
-      }
-      
-      // Validate filename doesn't contain suspicious patterns
-      if (file.originalname.includes('..') || file.originalname.includes('/') || file.originalname.includes('\\')) {
-        logger.warn({ filename: file.originalname }, 'Suspicious filename detected');
-        return cb(new Error('Invalid filename'));
-      }
-      
-      cb(null, true);
-    } catch (error) {
-      logger.error({ error, file: file.originalname }, 'File validation error');
-      cb(new Error('File validation failed'));
-    }
-  },
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-      
-      // Ensure upload directory exists and is within allowed paths
-      try {
-        const safeDir = PathTraversalGuard.validatePath(uploadDir);
-        if (!fs.existsSync(safeDir)) {
-          fs.mkdirSync(safeDir, { recursive: true });
-        }
-        cb(null, safeDir);
-      } catch (error) {
-        logger.error({ error, uploadDir }, 'Upload directory validation failed');
-        cb(new Error('Invalid upload directory'), '');
-      }
-    },
-    filename: (req, file, cb) => {
-      // Generate safe filename with timestamp
-      const timestamp = Date.now();
-      const ext = path.extname(file.originalname);
-      const baseName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const filename = `${baseName}_${timestamp}${ext}`;
-      cb(null, filename);
-    }
-  })
-});
 
 /**
  * Rate Limiting Configuration
@@ -464,10 +362,10 @@ export const validationSchemas = {
       })
     ).min(1).max(10).required(),
     config: Joi.object({
-      voice: Joi.string().valid('Paulo', 'Ana', 'Ricardo', 'Bia').optional(),
+      voice: Joi.string().valid(...Object.values(VoiceEnum)).optional(),
       language: Joi.string().valid('pt', 'en', 'es', 'fr').optional(),
       orientation: Joi.string().valid('portrait', 'landscape').optional(),
-      music: Joi.string().valid('happy', 'sad', 'energetic', 'calm', 'epic').optional(),
+      music: Joi.string().optional(), // Dynamic validation handled by DynamicValidation middleware
       referenceAudioPath: Joi.string().max(200).optional()
     }).required()
   }),
@@ -480,7 +378,7 @@ export const validationSchemas = {
 
   ttsRequest: Joi.object({
     text: Joi.string().min(1).max(1000).required(),
-    voice: Joi.string().valid('Paulo', 'Ana', 'Ricardo', 'Bia').optional(),
+    voice: Joi.string().valid(...Object.values(VoiceEnum)).optional(),
     language: Joi.string().valid('pt', 'en', 'es', 'fr').optional(),
     referenceAudioPath: Joi.string().max(200).optional()
   }),

@@ -45,7 +45,7 @@ import {
   RenderConfig,
   VoiceEnum,
   OrientationEnum,
-  MusicMoodEnum,
+  MusicMood,
   CaptionPositionEnum,
   MusicVolumeEnum,
 } from '../../types/shorts';
@@ -66,6 +66,7 @@ const VideoStudio: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(false);
+  const [searchTermInputs, setSearchTermInputs] = useState<{ [key: number]: string }>({});
 
   const [formData, setFormData] = useState<FormData>({
     scenes: [
@@ -76,7 +77,7 @@ const VideoStudio: React.FC = () => {
     ],
     config: {
       paddingBack: 3000,
-      music: MusicMoodEnum.chill,
+      music: 'chill',
       captionPosition: CaptionPositionEnum.bottom,
       captionBackgroundColor: '#000000',
       captionTextColor: '#ffffff',
@@ -89,7 +90,7 @@ const VideoStudio: React.FC = () => {
 
   const [availableOptions, setAvailableOptions] = useState({
     voices: Object.values(VoiceEnum),
-    musicTags: Object.values(MusicMoodEnum),
+    musicTags: [] as string[],
   });
 
   useEffect(() => {
@@ -98,12 +99,12 @@ const VideoStudio: React.FC = () => {
         setLoadingOptions(true);
         const [voicesResponse, musicResponse] = await Promise.all([
           axios.get('/api/voices'),
-          axios.get('/api/music-tags'),
+          axios.get('/api/library/moods'),
         ]);
 
         setAvailableOptions({
-          voices: voicesResponse.data,
-          musicTags: musicResponse.data,
+          voices: Array.isArray(voicesResponse.data) ? voicesResponse.data : Object.values(VoiceEnum),
+          musicTags: musicResponse.data?.data?.moods || [],
         });
       } catch (err) {
         console.error('Failed to fetch options:', err);
@@ -117,11 +118,21 @@ const VideoStudio: React.FC = () => {
 
   const handleSceneChange = (index: number, field: keyof SceneInput, value: any) => {
     const newScenes = [...formData.scenes];
-    if (field === 'searchTerms' && typeof value === 'string') {
-      newScenes[index] = {
-        ...newScenes[index],
-        [field]: value.split(',').map((term: string) => term.trim()).filter(Boolean),
-      };
+    if (field === 'searchTerms') {
+      if (typeof value === 'string') {
+        // Parse comma-separated terms, remove duplicates
+        const terms = value.split(',').map((term: string) => term.trim()).filter(Boolean);
+        const uniqueTerms = Array.from(new Set(terms));
+        newScenes[index] = {
+          ...newScenes[index],
+          [field]: uniqueTerms,
+        };
+      } else if (Array.isArray(value)) {
+        newScenes[index] = {
+          ...newScenes[index],
+          [field]: value,
+        };
+      }
     } else {
       newScenes[index] = {
         ...newScenes[index],
@@ -141,6 +152,45 @@ const VideoStudio: React.FC = () => {
     });
   };
 
+  const handleSearchTermKeyPress = (index: number, e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const inputValue = searchTermInputs[index] || '';
+      const trimmedValue = inputValue.trim();
+      
+      if (trimmedValue && !formData.scenes[index].searchTerms.includes(trimmedValue)) {
+        const newTerms = [...formData.scenes[index].searchTerms, trimmedValue];
+        handleSceneChange(index, 'searchTerms', newTerms);
+        setSearchTermInputs({ ...searchTermInputs, [index]: '' });
+      }
+    }
+  };
+
+  const handleSearchTermInputChange = (index: number, value: string) => {
+    // Check if the last character is a comma
+    if (value.endsWith(',')) {
+      const termWithoutComma = value.slice(0, -1).trim();
+      if (termWithoutComma && !formData.scenes[index].searchTerms.includes(termWithoutComma)) {
+        const newTerms = [...formData.scenes[index].searchTerms, termWithoutComma];
+        handleSceneChange(index, 'searchTerms', newTerms);
+        setSearchTermInputs({ ...searchTermInputs, [index]: '' });
+      }
+    } else {
+      setSearchTermInputs({ ...searchTermInputs, [index]: value });
+    }
+  };
+
+  const handleSearchTermBlur = (index: number) => {
+    const inputValue = searchTermInputs[index] || '';
+    const trimmedValue = inputValue.trim();
+    
+    if (trimmedValue && !formData.scenes[index].searchTerms.includes(trimmedValue)) {
+      const newTerms = [...formData.scenes[index].searchTerms, trimmedValue];
+      handleSceneChange(index, 'searchTerms', newTerms);
+      setSearchTermInputs({ ...searchTermInputs, [index]: '' });
+    }
+  };
+
   const addScene = () => {
     setFormData({
       ...formData,
@@ -158,6 +208,22 @@ const VideoStudio: React.FC = () => {
     if (formData.scenes.length > 1) {
       const newScenes = formData.scenes.filter((_, i) => i !== index);
       setFormData({ ...formData, scenes: newScenes });
+      
+      // Clean up search term inputs
+      const newSearchTermInputs = { ...searchTermInputs };
+      delete newSearchTermInputs[index];
+      
+      // Reindex remaining inputs
+      const reindexedInputs: { [key: number]: string } = {};
+      Object.keys(newSearchTermInputs).forEach((key) => {
+        const keyNum = parseInt(key);
+        if (keyNum > index) {
+          reindexedInputs[keyNum - 1] = newSearchTermInputs[keyNum];
+        } else {
+          reindexedInputs[keyNum] = newSearchTermInputs[keyNum];
+        }
+      });
+      setSearchTermInputs(reindexedInputs);
     }
   };
 
@@ -283,27 +349,43 @@ const VideoStudio: React.FC = () => {
                 <TextField
                   fullWidth
                   label="Termos de busca"
-                  placeholder="palavra1, palavra2, palavra3"
-                  value={scene.searchTerms.join(', ')}
-                  onChange={(e) => handleSceneChange(index, 'searchTerms', e.target.value)}
-                  helperText="Palavras-chave para buscar vídeos relacionados, separadas por vírgula"
+                  placeholder="Digite um termo e pressione Enter ou vírgula para adicionar"
+                  value={searchTermInputs[index] || ''}
+                  onChange={(e) => handleSearchTermInputChange(index, e.target.value)}
+                  onKeyPress={(e) => handleSearchTermKeyPress(index, e)}
+                  onBlur={() => handleSearchTermBlur(index)}
+                  helperText={`Adicione palavras-chave para buscar vídeos relacionados. ${scene.searchTerms.length > 0 ? `${scene.searchTerms.length} termos adicionados` : 'Pressione Enter ou vírgula após cada termo'}`}
                   variant="outlined"
+                  InputProps={{
+                    sx: {
+                      '& input': {
+                        pr: scene.searchTerms.length > 0 ? 1 : 2,
+                      },
+                    },
+                  }}
                 />
               </Grid>
               {scene.searchTerms.length > 0 && (
                 <Grid item xs={12}>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {scene.searchTerms.map((term, termIndex) => (
-                      <Chip
-                        key={termIndex}
-                        label={term}
-                        size="small"
-                        onDelete={() => {
-                          const newTerms = scene.searchTerms.filter((_, i) => i !== termIndex);
-                          handleSceneChange(index, 'searchTerms', newTerms.join(', '));
-                        }}
-                      />
-                    ))}
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                      Termos de busca adicionados (clique no X para remover):
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {scene.searchTerms.map((term, termIndex) => (
+                        <Chip
+                          key={termIndex}
+                          label={term}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          onDelete={() => {
+                            const newTerms = scene.searchTerms.filter((_, i) => i !== termIndex);
+                            handleSceneChange(index, 'searchTerms', newTerms);
+                          }}
+                        />
+                      ))}
+                    </Box>
                   </Box>
                 </Grid>
               )}
@@ -336,11 +418,19 @@ const VideoStudio: React.FC = () => {
                     label="Voz"
                     onChange={(e) => handleConfigChange('voice', e.target.value)}
                   >
-                    {availableOptions.voices.map((voice) => (
-                      <MenuItem key={voice} value={voice}>
-                        {voice.replace('_', ' ').toUpperCase()}
-                      </MenuItem>
-                    ))}
+                    {availableOptions.voices && availableOptions.voices.length > 0 ? (
+                      availableOptions.voices.map((voice) => (
+                        <MenuItem key={voice} value={voice}>
+                          {voice.replace('_', ' ').toUpperCase()}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      Object.values(VoiceEnum).map((voice) => (
+                        <MenuItem key={voice} value={voice}>
+                          {voice.replace('_', ' ').toUpperCase()}
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
               </Grid>
@@ -415,11 +505,15 @@ const VideoStudio: React.FC = () => {
                     label="Humor da Música"
                     onChange={(e) => handleConfigChange('music', e.target.value)}
                   >
-                    {availableOptions.musicTags.map((tag) => (
-                      <MenuItem key={tag} value={tag}>
-                        {tag.charAt(0).toUpperCase() + tag.slice(1)}
-                      </MenuItem>
-                    ))}
+                    {availableOptions.musicTags && availableOptions.musicTags.length > 0 ? (
+                      availableOptions.musicTags.map((tag) => (
+                        <MenuItem key={tag} value={tag}>
+                          {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuItem value="chill">Chill</MenuItem>
+                    )}
                   </Select>
                 </FormControl>
               </Grid>
