@@ -74,7 +74,7 @@ const TTSStudio: React.FC = () => {
         language
       });
 
-      const audioData = response.data;
+      const audioData = response.data.data || response.data;
       const newAudio: GeneratedAudio = {
         id: Date.now().toString(),
         text: text.trim(),
@@ -303,7 +303,7 @@ const TTSStudio: React.FC = () => {
                           <IconButton
                             size="small"
                             component="a"
-                            href={`/api/temp/${audio.filename}`}
+                            href={`/api/temp/${audio.filename}?download=true`}
                             download
                           >
                             <DownloadIcon />

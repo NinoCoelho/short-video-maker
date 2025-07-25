@@ -57,12 +57,27 @@ const VideoDetails: React.FC = () => {
         setVideo(detailsResponse.data);
 
         const statusResponse = await axios.get(`/api/status/${id}`);
-        setStatus(statusResponse.data.status);
-        setStatusError(statusResponse.data.error || null);
+        const statusData = statusResponse.data.data || statusResponse.data;
+        setStatus(statusData.status);
+        setStatusError(statusData.error || null);
 
-      } catch (err) {
-        setError('Failed to fetch video details');
-        console.error('Error fetching video details:', err);
+      } catch (err: any) {
+        // If it's a 404, the video data might not be ready yet
+        if (err.response?.status === 404) {
+          // Try to get just the status
+          try {
+            const statusResponse = await axios.get(`/api/status/${id}`);
+            const statusData = statusResponse.data.data || statusResponse.data;
+            setStatus(statusData.status || 'processing');
+            setStatusError(statusData.error || null);
+          } catch (statusErr) {
+            setError('Video not found');
+            console.error('Error fetching video status:', statusErr);
+          }
+        } else {
+          setError('Failed to fetch video details');
+          console.error('Error fetching video details:', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -74,8 +89,9 @@ const VideoDetails: React.FC = () => {
       if (!id) return;
       try {
         const response = await axios.get(`/api/status/${id}`);
-        const newStatus = response.data.status;
-        const newError = response.data.error || null;
+        const statusData = response.data.data || response.data;
+        const newStatus = statusData.status;
+        const newError = statusData.error || null;
         setStatus(newStatus);
         setStatusError(newError);
         if (newStatus === 'ready' || newStatus === 'failed') {
@@ -241,6 +257,19 @@ const VideoDetails: React.FC = () => {
       return <Alert severity="error">{error}</Alert>;
     }
 
+    // If we have status but no video data yet, show processing
+    if (!video && (status === 'processing' || status === 'pending' || status === 'queued')) {
+      return (
+        <Box textAlign="center" py={4}>
+          <CircularProgress size={60} sx={{ mb: 2 }} />
+          <Typography variant="h6">Your video is being created...</Typography>
+          <Typography variant="body1" color="text.secondary">
+            This may take a few minutes. Please wait.
+          </Typography>
+        </Box>
+      );
+    }
+
     if (status === 'processing') {
       return (
         <Box textAlign="center" py={4}>
@@ -401,6 +430,7 @@ const VideoDetails: React.FC = () => {
               color={
                 status === 'ready' ? 'success.main' : 
                 status === 'processing' ? 'info.main' : 
+                status === 'pending' || status === 'queued' ? 'info.main' :
                 status === 'failed' ? 'error.main' : 'text.primary'
               }
             >

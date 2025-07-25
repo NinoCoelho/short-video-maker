@@ -412,7 +412,6 @@ export class APIRouter {
     }));
 
     this.router.get("/temp/:filename", 
-      PathTraversalGuard.middleware(['filename']),
       asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const { filename } = req.params;
       
@@ -435,10 +434,17 @@ export class APIRouter {
         const stat = fs.statSync(audioPath);
         const fileSize = stat.size;
 
-        const head = {
+        const isDownload = req.query.download === 'true';
+        const head: any = {
           'Content-Length': fileSize,
           'Content-Type': 'audio/wav',
+          'Cache-Control': 'public, max-age=3600'
         };
+        
+        if (isDownload) {
+          head['Content-Disposition'] = `attachment; filename="${filename}"`;
+        }
+        
         res.writeHead(200, head);
         fs.createReadStream(audioPath).pipe(res);
       } catch (error) {
