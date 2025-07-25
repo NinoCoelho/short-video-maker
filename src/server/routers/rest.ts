@@ -12,13 +12,13 @@ import {
   URLValidator, 
   APIKeyValidator, 
   validateRequest,
-  validationSchemas,
-  secureFileUpload
+  validationSchemas
 } from '../middleware/security';
+import { DynamicValidation } from '../middleware/dynamicValidation';
 
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { Config } from "../../config";
-import { RenderRequest, VoiceEnum, OrientationEnum, MusicMoodEnum, SceneInput, RenderConfig } from "../../types/shorts";
+import { RenderRequest, VoiceEnum, OrientationEnum, MusicMood, SceneInput, RenderConfig } from "../../types/shorts";
 import { VideoStatusManager } from "../../short-creator/VideoStatusManager";
 import { TranslationService } from '../../services/TranslationService';
 import { TranscriptionService } from '../../services/TranscriptionService';
@@ -101,6 +101,7 @@ export class APIRouter {
 
     this.router.post("/render", 
       validateRequest(validationSchemas.renderRequest),
+      DynamicValidation.validateMusicMood(),
       URLValidator.middleware(['newVideoUrl']),
       asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
       const renderRequest = req.body as RenderRequest;
@@ -530,13 +531,35 @@ export class APIRouter {
       const editedData = req.body; // Dados editados opcionais
       
       try {
-        await this.shortCreator.reRenderEditedVideo(id, editedData);
+        // Extract scenes and config from editedData
+        const scenes = editedData.scenes || [];
+        const config = editedData.config || {};
+        
+        // Validate required data
+        if (!scenes || scenes.length === 0) {
+          logger.warn({ id, editedData }, "No scenes provided for re-render, attempting to load existing data");
+          
+          // Try to load existing video data
+          const existingData = this.shortCreator.getScriptById(id);
+          if (existingData && existingData.scenes) {
+            await this.shortCreator.reRenderEditedVideo(id, existingData.scenes, existingData.config || {});
+          } else {
+            return res.status(400).json({
+              error: "No scenes provided and no existing video data found",
+              details: "Please provide scenes in the request body or ensure video data exists"
+            });
+          }
+        } else {
+          // Use provided scenes and config
+          await this.shortCreator.reRenderEditedVideo(id, scenes, config);
+        }
+        
         res.status(202).json({ 
           message: "Video re-render started", 
           videoId: id 
         });
       } catch (error) {
-        logger.error({ error, id }, "Error starting video re-render");
+        logger.error({ error, id, editedData }, "Error starting video re-render");
         res.status(500).json({
           error: "Failed to start video re-render",
           details: error instanceof Error ? error.message : "Unknown error",
@@ -1433,41 +1456,6 @@ Try this approach and let me know your results in the comments!
       await videoProxy(req, res);
     });
 
-    // Secure file upload endpoint
-    this.router.post("/upload", 
-      secureFileUpload.array('files', 5), // Maximum 5 files
-      asyncHandler(async (req: ExpressRequest, res: ExpressResponse) => {
-        try {
-          const files = req.files as Express.Multer.File[];
-          
-          if (!files || files.length === 0) {
-            throw new ValidationError("No files uploaded");
-          }
-
-          const uploadedFiles = files.map(file => ({
-            filename: file.filename,
-            originalName: file.originalname,
-            path: file.path,
-            size: file.size,
-            mimetype: file.mimetype,
-            url: `/api/uploads/${file.filename}`
-          }));
-
-          logger.info({ 
-            uploadCount: files.length, 
-            totalSize: files.reduce((sum, f) => sum + f.size, 0) 
-          }, "Files uploaded successfully");
-
-          res.status(200).json({
-            message: "Files uploaded successfully",
-            files: uploadedFiles
-          });
-        } catch (error) {
-          logger.error({ error }, "File upload error");
-          throw error;
-        }
-      })
-    );
 
     // Video search configuration routes
     const { videoSearchConfigRouter } = require("../routes/videoSearchConfig");

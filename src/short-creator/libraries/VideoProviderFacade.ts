@@ -14,6 +14,7 @@ import { VideoKeywordFilter } from "./Videos/VideoKeywordFilter";
 import { VideoRateLimiter } from "./Videos/VideoRateLimiter";
 import { ImageCacheService } from "../../services/ImageCacheService";
 import { SearchFallbackStrategy } from "./Videos/SearchFallbackStrategy";
+import { VideoProviderManager } from "./Videos/VideoProviderManager";
 
 import { 
   ProvidersConfig, 
@@ -33,6 +34,7 @@ export class VideoProviderFacade implements VideoProvider {
   private rateLimiter: VideoRateLimiter;
   private imageCacheService: ImageCacheService;
   private searchFallback: SearchFallbackStrategy;
+  private providerManager: VideoProviderManager;
   private providerHealth: Map<string, ProviderHealth> = new Map();
 
   constructor(private globalConfig: Config, private port: number = 3123) {
@@ -47,6 +49,7 @@ export class VideoProviderFacade implements VideoProvider {
     this.rateLimiter = new VideoRateLimiter();
     this.imageCacheService = new ImageCacheService(this.globalConfig.dataDirPath);
     this.searchFallback = new SearchFallbackStrategy();
+    this.providerManager = new VideoProviderManager(this.providers);
     this.initializeRateLimiter();
   }
 
@@ -149,10 +152,28 @@ export class VideoProviderFacade implements VideoProvider {
     retryCounter: number = 0,
     projectId?: string
   ): Promise<Video[]> {
+    logger.info({ 
+      originalSearchTerms: searchTerms,
+      minDurationSeconds,
+      orientation,
+      count 
+    }, "VideoProviderFacade.findVideos called");
+    
     const sanitizedTerms = this.keywordFilter.filterSearchTerms(searchTerms);
     
     if (sanitizedTerms.length === 0) {
+      logger.warn({ 
+        originalSearchTerms: searchTerms,
+        fallbackTerms: ['nature', 'landscape']
+      }, "All search terms were filtered out by negative keywords, using fallback terms");
+      
       sanitizedTerms.push('nature', 'landscape');
+    } else {
+      logger.info({ 
+        originalSearchTerms: searchTerms,
+        sanitizedTerms,
+        filteredOutCount: searchTerms.length - sanitizedTerms.length
+      }, "Search terms processed by negative keyword filter");
     }
 
     const recentlyUsedIds = this.config.usageTracking.enabled 
@@ -170,38 +191,16 @@ export class VideoProviderFacade implements VideoProvider {
     };
 
     try {
-      let results = await this.searchAcrossProviders(searchContext, count, timeout);
-      
-      // If no results, try with fallback terms
-      if (results.length === 0) {
-        logger.info({ originalTerms: sanitizedTerms }, 'No results found, trying fallback search');
-        
-        const fallbackTerms = this.searchFallback.generateFallbackTerms(sanitizedTerms);
-        const fallbackContext: VideoSearchContext = {
-          ...searchContext,
-          searchTerms: fallbackTerms
-        };
-        
-        results = await this.searchAcrossProviders(fallbackContext, count, timeout);
-        
-        // If still no results, try category fallback
-        if (results.length === 0) {
-          logger.info('Trying category-based fallback search');
-          const categoryTerms = this.searchFallback.getCategoryFallback(sanitizedTerms);
-          const categoryContext: VideoSearchContext = {
-            ...searchContext,
-            searchTerms: categoryTerms
-          };
-          
-          results = await this.searchAcrossProviders(categoryContext, count, timeout);
-        }
-      }
-      
-      if (results.length === 0) {
-        logger.warn({ searchTerms, sanitizedTerms }, 'No videos found even with fallback searches');
-        throw new VideoSearchError(`No videos found for search: ${searchTerms.join(' ')}`);
-      }
-      
+      // Use the new VideoProviderManager with round-robin and progressive fallbacks
+      const results = await this.providerManager.searchWithRoundRobinFallback(
+        sanitizedTerms,
+        minDurationSeconds,
+        allExcludeIds,
+        orientation,
+        count,
+        timeout
+      );
+
       // If we got fewer videos than requested, log a warning
       if (results.length < count) {
         logger.warn({ 
@@ -209,7 +208,7 @@ export class VideoProviderFacade implements VideoProvider {
           found: results.length, 
           searchTerms,
           excludeIds: excludeIds?.length || 0
-        }, 'Found fewer videos than requested');
+        }, 'Found fewer videos than requested with new search system');
       }
 
       if (this.config.usageTracking.enabled && projectId) {
@@ -219,14 +218,64 @@ export class VideoProviderFacade implements VideoProvider {
         });
       }
 
+      logger.info({ 
+        searchTerms,
+        sanitizedTerms,
+        resultsFound: results.length,
+        targetCount: count
+      }, 'Video search completed with new round-robin system');
+
       return results;
     } catch (error) {
-      logger.error({ searchTerms, error }, "Video search failed across all providers");
-      throw error;
+      logger.error({ searchTerms, sanitizedTerms, error }, "Video search failed with new round-robin system");
+      
+      // Fallback to old system if new system fails completely
+      logger.warn({ searchTerms }, "Falling back to legacy search system");
+      try {
+        let legacyResults = await this.legacySearchAcrossProviders(searchContext, count, timeout);
+        
+        // If no results with legacy system, try old fallback methods
+        if (legacyResults.length === 0) {
+          logger.info({ originalTerms: sanitizedTerms }, 'Legacy: No results found, trying fallback search');
+          
+          const fallbackTerms = this.searchFallback.generateFallbackTerms(sanitizedTerms);
+          const fallbackContext: VideoSearchContext = {
+            ...searchContext,
+            searchTerms: fallbackTerms
+          };
+          
+          legacyResults = await this.legacySearchAcrossProviders(fallbackContext, count, timeout);
+          
+          // If still no results, try category fallback
+          if (legacyResults.length === 0) {
+            logger.info('Legacy: Trying category-based fallback search');
+            const categoryTerms = this.searchFallback.getCategoryFallback(sanitizedTerms);
+            const categoryContext: VideoSearchContext = {
+              ...searchContext,
+              searchTerms: categoryTerms
+            };
+            
+            legacyResults = await this.legacySearchAcrossProviders(categoryContext, count, timeout);
+          }
+        }
+        
+        if (this.config.usageTracking.enabled && projectId) {
+          legacyResults.forEach(video => {
+            const provider = video.id.split('_')[0];
+            this.usageTracker.trackUsage(video.id, provider, projectId, sanitizedTerms);
+          });
+        }
+        
+        logger.info({ searchTerms, resultsFound: legacyResults.length }, 'Legacy search system provided fallback results');
+        return legacyResults;
+      } catch (legacyError) {
+        logger.error({ searchTerms, error: legacyError }, "Legacy search system also failed");
+        throw error; // Throw original error
+      }
     }
   }
 
-  private async searchAcrossProviders(
+  private async legacySearchAcrossProviders(
     context: VideoSearchContext,
     count: number,
     timeout: number
@@ -466,13 +515,47 @@ export class VideoProviderFacade implements VideoProvider {
   }
 
   getProviderStats(): Record<string, ProviderHealth> {
-    const stats: Record<string, ProviderHealth> = {};
+    const legacyStats: Record<string, ProviderHealth> = {};
     
     for (const [providerName, health] of this.providerHealth.entries()) {
-      stats[providerName] = { ...health };
+      legacyStats[providerName] = { ...health };
     }
     
-    return stats;
+    // Merge with new provider manager stats
+    const newProviderStats = this.providerManager.getProviderStats();
+    const mergedStats: Record<string, any> = {};
+    
+    for (const [providerName, legacyHealth] of Object.entries(legacyStats)) {
+      const newStats = newProviderStats[providerName] || {};
+      mergedStats[providerName] = {
+        ...legacyHealth,
+        // Add new stats from VideoProviderManager
+        roundRobinStats: {
+          totalRequests: newStats.totalRequests || 0,
+          successfulRequests: newStats.successfulRequests || 0,
+          successRate: newStats.successRate || 0,
+          averageResponseTime: newStats.averageResponseTime || 0,
+          performanceScore: newStats.performanceScore || 0,
+          lastUsed: newStats.lastUsed || 0
+        }
+      };
+    }
+    
+    return mergedStats;
+  }
+
+  /**
+   * Get detailed round-robin provider statistics
+   */
+  getRoundRobinProviderStats(): Record<string, any> {
+    return this.providerManager.getProviderStats();
+  }
+
+  /**
+   * Reset round-robin provider performance metrics
+   */
+  resetRoundRobinStats(): void {
+    this.providerManager.resetProviderStats();
   }
 
   getUsageStats(projectId?: string) {

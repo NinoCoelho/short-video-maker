@@ -274,11 +274,13 @@ export function getAudioUrl(filename: string, context: 'browser' | 'remotion' | 
  * Get music URL for different contexts
  */
 export function getMusicUrl(filename: string, context: 'browser' | 'remotion' | 'server' = 'browser'): string {
-  return resolveUrl(`/api/music/${encodeURIComponent(filename)}`, context);
+  // Music files are served from /music/, not /api/music/
+  return resolveUrl(`/music/${encodeURIComponent(filename)}`, context);
 }
 
 export function getOverlayUrl(overlay: string, context: 'browser' | 'remotion' | 'server' = 'browser'): string {
-  return resolveUrl(`/api/overlays/${overlay}.png`, context);
+  // Overlay files are served from /overlays/, not /api/overlays/
+  return resolveUrl(`/overlays/${overlay}.png`, context);
 }
 
 export function getVideoUrl(url: string): string {

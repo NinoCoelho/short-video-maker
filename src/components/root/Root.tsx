@@ -55,7 +55,7 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={{
           music: {
             url:
-              `http://localhost:${PORT}/api/music/` +
+              `http://localhost:${PORT}/music/` +
               encodeURIComponent(
                 "Aurora on the Boulevard - National Sweetheart.mp3",
               ),
@@ -100,7 +100,7 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={{
           music: {
             url:
-              `http://localhost:${PORT}/api/music/` +
+              `http://localhost:${PORT}/music/` +
               encodeURIComponent(
                 "Aurora on the Boulevard - National Sweetheart.mp3",
               ),

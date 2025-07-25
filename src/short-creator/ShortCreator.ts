@@ -1,4 +1,4 @@
-import { OrientationEnum, MusicMoodEnum, VoiceEnum, Video, ShortResult, AudioResult, SceneInput, RenderConfig, Scene, MusicTag, MusicForVideo, Caption, ShortQueue, VideoData, EditedVideoData, VideoChange, RegenerateOptions, VideoChanges } from "../types/shorts";
+import { OrientationEnum, MusicMood, VoiceEnum, Video, ShortResult, AudioResult, SceneInput, RenderConfig, Scene, MusicTag, MusicForVideo, Caption, ShortQueue, VideoData, EditedVideoData, VideoChange, RegenerateOptions, VideoChanges, ImportedVideo, ImportVideoSegment, ImportSettings } from "../types/shorts";
 import * as fs from "fs-extra";
 import { promises as fsPromises } from "fs";
 import cuid from "cuid";
@@ -139,7 +139,23 @@ export class ShortCreator {
     sceneInput: SceneInput[],
     config: RenderConfig
   ): Promise<void> {
-    logger.info({ videoId }, "Starting re-render process");
+    logger.info({ 
+      videoId, 
+      sceneCount: sceneInput?.length,
+      configReceived: !!config,
+      configKeys: config ? Object.keys(config) : []
+    }, "Starting re-render process");
+    
+    // Validate input parameters
+    if (!videoId) {
+      throw new Error("Video ID is required for re-rendering");
+    }
+    if (!sceneInput || !Array.isArray(sceneInput)) {
+      throw new Error("Scene input array is required for re-rendering");
+    }
+    if (!config) {
+      throw new Error("Configuration is required for re-rendering");
+    }
     
     try {
       await this.statusManager.setStatus(videoId, "processing", "Starting re-render...", 0, "Initializing");
@@ -489,6 +505,14 @@ export class ShortCreator {
   // IMPORT METHODS
   // ===================================================================
 
+  // Method overload for processed import data (from ImportService)
+  public addImportToQueue(
+    importedVideo: ImportedVideo,
+    videoSegments: ImportVideoSegment[],
+    importSettings: ImportSettings,
+    renderConfig: RenderConfig
+  ): string;
+  // Method overload for legacy video path import
   public addImportToQueue(
     videoPath: string,
     config: {
@@ -498,8 +522,76 @@ export class ShortCreator {
       voice?: VoiceEnum;
       music?: MusicTag;
       orientation?: OrientationEnum;
-    } = {}
+    }
+  ): string;
+  public addImportToQueue(
+    importedVideoOrPath: ImportedVideo | string,
+    videoSegmentsOrConfig?: ImportVideoSegment[] | {
+      title?: string;
+      description?: string;
+      language?: string;
+      voice?: VoiceEnum;
+      music?: MusicTag;
+      orientation?: OrientationEnum;
+    },
+    importSettings?: ImportSettings,
+    renderConfig?: RenderConfig
   ): string {
+    // Handle the new overload (processed import data)
+    if (typeof importedVideoOrPath === 'object' && 'sourceUrl' in importedVideoOrPath) {
+      const importedVideo = importedVideoOrPath;
+      const videoSegments = videoSegmentsOrConfig as ImportVideoSegment[];
+      
+      const videoId = importedVideo.id;
+      logger.info({ videoId, segmentCount: videoSegments.length }, "Adding processed import to queue");
+
+      // Convert VideoSegments to SceneInput using ImportConverter
+      const sceneInput = ImportConverter.convertSegmentsToSceneInputs(
+        videoSegments, 
+        importedVideo, 
+        renderConfig!
+      );
+
+      // Create proper ImportQueueItem with all required fields
+      const importItem: ImportQueueItem = {
+        id: videoId,
+        type: "import",
+        sceneInput,
+        config: renderConfig!,
+        status: "pending",
+        priority: "high",
+        importedVideo,
+        videoSegments,
+        importSettings: importSettings!,
+        originalScenes: sceneInput // Backup for recovery
+      };
+
+      // Set initial video status to bridge import→render tracking
+      this.statusManager.setStatus(
+        videoId, 
+        "processing", 
+        "Import queued for rendering", 
+        0, 
+        "queued"
+      ).catch(error => {
+        logger.error({ videoId, error }, "Failed to set initial status for processed import");
+      });
+
+      this.queueManager.addToImportQueue(importItem);
+      return videoId;
+    }
+    
+    // Handle the legacy overload (video path)
+    const videoPath = importedVideoOrPath as string;
+    const config = (videoSegmentsOrConfig || {}) as {
+      title?: string;
+      description?: string;
+      language?: string;
+      voice?: VoiceEnum;
+      music?: MusicTag;
+      orientation?: OrientationEnum;
+    };
+    
     const videoId = cuid();
     logger.info({ videoId, videoPath, config }, "Adding imported video to queue");
 
@@ -611,123 +703,23 @@ export class ShortCreator {
   }
 
   private async processImportedVideo(importItem: ImportQueueItem): Promise<void> {
-    const { id: videoId, config } = importItem;
-    const videoPath = (importItem as any).importPath || ''; // Get video path from custom property
+    const { id: videoId, importedVideo, videoSegments, importSettings, config } = importItem;
     
-    logger.info({ videoId, videoPath }, "Processing imported video");
+    logger.info({ videoId }, "Processing imported video for rendering");
     
     try {
-      await this.statusManager.setImportStage(
-        videoId, 
-        ImportStage.DOWNLOADING, 
-        10, 
-        "Processing imported video..."
-      );
-
-      // Create import directory
-      const importDir = path.join(this.globalConfig.tempDirPath, 'imports', videoId);
-      await fs.ensureDir(importDir);
-
-      // Copy video to import directory
-      const videoFileName = `imported_${videoId}${path.extname(videoPath)}`;
-      const localVideoPath = path.join(importDir, videoFileName);
-      await fs.copy(videoPath, localVideoPath);
-
-      // Extract audio and generate transcription
-      await this.statusManager.setImportStage(
-        videoId, 
-        ImportStage.TRANSCRIBING, 
-        20, 
-        "Extracting audio..."
-      );
-
-      const audioPath = path.join(importDir, 'audio.wav');
-      // Extract audio using FFmpeg command directly
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(localVideoPath)
-          .noVideo()
-          .audioCodec('pcm_s16le')
-          .audioFrequency(16000)
-          .audioChannels(1)
-          .output(audioPath)
-          .on('end', () => resolve())
-          .on('error', (err) => reject(err))
-          .run();
-      });
-
-      // Generate transcription
-      await this.statusManager.setImportStage(
-        videoId, 
-        ImportStage.TRANSCRIBING, 
-        40, 
-        "Generating transcription..."
-      );
-
-      // Here you would call your transcription service
-      // For now, we'll create placeholder scenes
-      const scenes: SceneInput[] = [
-        {
-          text: "This is an imported video that needs transcription.",
-          searchTerms: ["imported", "video"],
-          videos: [`/api/cached-video/${videoFileName}`]
-        }
-      ];
-
-      // Process scenes
-      await this.statusManager.setImportStage(
-        videoId, 
-        ImportStage.ANALYZING, 
-        60, 
-        "Processing scenes..."
-      );
-
-      const renderConfig: RenderConfig = {
-        orientation: config.orientation || OrientationEnum.portrait,
-        voice: config.voice || VoiceEnum.Paulo,
-        language: config.language || "en",
-        music: config.music
-      };
-
-      const { remotionData, updatedScriptScenes } = await this.sceneManager.processScenes(
-        videoId,
-        scenes,
-        renderConfig
-      );
-
-      // Find and add music
-      const totalDuration = remotionData.scenes.reduce((acc: number, s: Scene) => acc + s.duration, 0);
-      remotionData.music = this.findMusic(totalDuration, config.music);
-
-      // Save data
-      await this.saveVideoData(videoId, remotionData);
+      // Update status to indicate render phase started
+      await this.statusManager.transitionToRenderPipeline(videoId);
       
-      const scriptPath = path.join(this.globalConfig.videosDirPath, `${videoId}.script.json`);
-      const scriptData = {
-        scenes: updatedScriptScenes,
-        config: renderConfig,
-        createdAt: new Date().toISOString(),
-        imported: true,
-        originalVideo: videoPath
-      };
-      fs.writeJsonSync(scriptPath, scriptData, { spaces: 2 });
-
-      // Update status to ready for rendering
-      await this.statusManager.setImportStage(
-        videoId, 
-        ImportStage.CONVERTING, 
-        80, 
-        "Ready for rendering..."
-      );
-
-      // Add to render queue
-      this.queueManager.addToRenderQueue(videoId);
+      // Use existing scene processing logic with converted scenes
+      await this.sceneManager.processScenes(videoId, importItem.sceneInput, config);
+      
+      // Continue with normal video rendering pipeline
+      await this.remotionRenderer.renderFromRenderJson(videoId);
       
     } catch (error) {
-      logger.error({ videoId, error }, "Error processing imported video");
-      await this.statusManager.setError(
-        videoId, 
-        error instanceof Error ? error.message : "Import failed"
-      );
+      logger.error({ videoId, error }, "Failed to process imported video");
+      await this.statusManager.setError(videoId, `Import processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
