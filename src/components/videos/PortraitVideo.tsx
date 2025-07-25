@@ -71,6 +71,7 @@ export const PortraitVideo: FC<Props> = ({
     hook: config?.hook,
     captionTextColor: config?.captionTextColor,
     overlay: config?.overlay,
+    overlayUrl: config?.overlay ? getOverlayUrl(config.overlay, 'remotion') : null,
     musicVolume: config?.musicVolume,
     scenesCount: scenes.length
   });
@@ -317,22 +318,6 @@ export const PortraitVideo: FC<Props> = ({
         </div>
       )}
 
-      {config?.overlay && (
-        <Img
-          src={getOverlayUrl(config.overlay, 'remotion')}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            zIndex: 1000,
-            pointerEvents: "none",
-          }}
-        />
-      )}
-
       {/* Fade to black overlay */}
       <div
         style={{
@@ -343,10 +328,33 @@ export const PortraitVideo: FC<Props> = ({
           height: "100%",
           backgroundColor: "black",
           opacity: getBackgroundOpacity(frame),
-          zIndex: 2000,
+          zIndex: 1500,
           pointerEvents: "none",
         }}
       />
+
+      {config?.overlay && (
+        <Img
+          src={getOverlayUrl(config.overlay, 'remotion')}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            zIndex: 2000,
+            pointerEvents: "none",
+          }}
+          onError={(e) => {
+            console.error('[PortraitVideo] Overlay image failed to load:', {
+              overlay: config.overlay,
+              src: getOverlayUrl(config.overlay, 'remotion'),
+              error: e
+            });
+          }}
+        />
+      )}
 
       {scenes.map((scene, i) => {
         const { captions, audio, videos } = scene;

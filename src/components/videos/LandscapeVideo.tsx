@@ -151,22 +151,6 @@ export const LandscapeVideo: FC<Props> = ({
         muted={musicMuted}
       />
 
-      {config?.overlay && (
-        <Img
-          src={getOverlayUrl(config.overlay, 'remotion')}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            zIndex: 1,
-            opacity: getVideoOpacity(frame),
-          }}
-        />
-      )}
-
       {/* Fade to black overlay */}
       <div
         style={{
@@ -177,10 +161,33 @@ export const LandscapeVideo: FC<Props> = ({
           height: "100%",
           backgroundColor: "black",
           opacity: getBackgroundOpacity(frame),
-          zIndex: 2000,
+          zIndex: 1500,
           pointerEvents: "none",
         }}
       />
+
+      {config?.overlay && (
+        <Img
+          src={getOverlayUrl(config.overlay, 'remotion')}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            zIndex: 2000,
+            pointerEvents: "none",
+          }}
+          onError={(e) => {
+            console.error('[LandscapeVideo] Overlay image failed to load:', {
+              overlay: config.overlay,
+              src: getOverlayUrl(config.overlay, 'remotion'),
+              error: e
+            });
+          }}
+        />
+      )}
 
       {config?.hook && frame === 0 && (
         <div

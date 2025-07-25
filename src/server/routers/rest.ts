@@ -139,7 +139,7 @@ export class APIRouter {
             throw new ProcessingError("Missing scenes or config data", videoId, "validation");
           }
           
-          logger.debug({ videoId, config }, "Config before defaults");
+          logger.debug({ videoId, config, overlay: config?.overlay }, "Config before defaults");
           
           // Garante que o config tenha valores padrão necessários
           config = {
@@ -149,12 +149,18 @@ export class APIRouter {
             language: config.language || "pt"
           };
           
-          logger.debug({ videoId, config }, "Config after defaults");
+          logger.debug({ videoId, config, overlay: config?.overlay }, "Config after defaults");
         }
         
         await this.shortCreator.reRenderVideo(videoId, scenes, config);
       } else {
         // Cria um novo vídeo
+        logger.debug({ 
+          scenes: renderRequest.scenes?.length, 
+          config: renderRequest.config,
+          overlay: renderRequest.config?.overlay 
+        }, "Creating new video with config");
+        
         videoId = await this.shortCreator.addToQueue(
           renderRequest.scenes,
           renderRequest.config

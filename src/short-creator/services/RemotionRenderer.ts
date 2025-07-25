@@ -239,7 +239,9 @@ export class RemotionRenderer {
     logger.info({ 
       sceneCount: processedData.scenes.length,
       orientation: processedData.config.orientation,
-      duration: processedData.config.durationInSec
+      duration: processedData.config.durationInSec,
+      overlay: processedData.config.overlay,
+      configKeys: Object.keys(processedData.config)
     }, "Video data preprocessing completed successfully");
     
     return processedData;

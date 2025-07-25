@@ -47,7 +47,12 @@ export class SceneManager {
     inputScenes: SceneInput[],
     config: RenderConfig
   ): Promise<{ remotionData: any, updatedScriptScenes: SceneInput[] }> {
-    logger.info({ videoId, sceneCount: inputScenes.length }, "Processing scenes");
+    logger.info({ 
+      videoId, 
+      sceneCount: inputScenes.length,
+      configOverlay: config.overlay,
+      configKeys: Object.keys(config)
+    }, "Processing scenes");
     
     const orientation: OrientationEnum = config.orientation || OrientationEnum.portrait;
     const remotionDataNested: Scene[][] = [];
@@ -269,14 +274,29 @@ export class SceneManager {
     // Calculate total duration
     const totalDuration = remotionDataNested.flat().reduce((acc: number, s: any) => acc + s.duration, 0);
 
+    logger.debug({ 
+      videoId, 
+      configOverlay: config.overlay,
+      configKeys: Object.keys(config),
+      totalDuration 
+    }, "Building final remotion data with config");
+
+    const finalConfig = {
+      ...config,
+      durationMs: totalDuration * 1000,
+      port: this.globalConfig.port,
+    };
+
+    logger.debug({ 
+      videoId, 
+      finalConfigOverlay: finalConfig.overlay,
+      finalConfigKeys: Object.keys(finalConfig)
+    }, "Final config for remotion");
+
     return {
       remotionData: {
         scenes: remotionDataNested.flat(),
-        config: {
-          ...config,
-          durationMs: totalDuration * 1000,
-          port: this.globalConfig.port,
-        },
+        config: finalConfig,
       },
       updatedScriptScenes: newScriptScenes
     };

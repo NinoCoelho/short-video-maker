@@ -366,7 +366,17 @@ export const validationSchemas = {
       language: Joi.string().valid('pt', 'en', 'es', 'fr').optional(),
       orientation: Joi.string().valid('portrait', 'landscape').optional(),
       music: Joi.string().optional(), // Dynamic validation handled by DynamicValidation middleware
-      referenceAudioPath: Joi.string().max(200).optional()
+      referenceAudioPath: Joi.string().max(200).optional(),
+      overlay: Joi.string().max(100).optional(),
+      hook: Joi.string().max(500).optional(),
+      title: Joi.string().max(200).optional(),
+      caption: Joi.string().max(2000).optional(),
+      hashtags: Joi.string().max(500).optional(),
+      musicVolume: Joi.string().valid('muted', 'low', 'medium', 'high').optional(),
+      captionBackgroundColor: Joi.string().max(20).optional(),
+      captionTextColor: Joi.string().max(20).optional(),
+      captionPosition: Joi.string().valid('top', 'center', 'bottom').optional(),
+      paddingBack: Joi.number().min(0).max(10000).optional()
     }).required()
   }),
 
