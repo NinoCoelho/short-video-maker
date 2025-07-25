@@ -86,7 +86,7 @@ async function main() {
     );
 
     // Iniciar servidor
-    const server = new Server(config, shortCreator, downloadSystem);
+    const server = new Server(config, shortCreator, downloadSystem, projectRoot);
     await server.start();
     logger.info("Server started successfully");
 

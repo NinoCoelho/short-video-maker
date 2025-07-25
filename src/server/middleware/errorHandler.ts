@@ -174,15 +174,20 @@ export const gracefulShutdownHandler = (server: any) => {
   return (signal: string) => {
     logger.info(`${signal} received. Shutting down gracefully...`);
     
-    server.close(() => {
-      logger.info('Process terminated');
-      process.exit(0);
-    });
+    if (server && typeof server.close === 'function') {
+      server.close(() => {
+        logger.info('Process terminated');
+        process.exit(0);
+      });
 
-    // Force close after 10 seconds
-    setTimeout(() => {
-      logger.error('Could not close connections in time, forcefully shutting down');
-      process.exit(1);
-    }, 10000);
+      // Force close after 10 seconds
+      setTimeout(() => {
+        logger.error('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 10000);
+    } else {
+      logger.warn('Server not available for graceful shutdown, exiting immediately');
+      process.exit(0);
+    }
   };
 };

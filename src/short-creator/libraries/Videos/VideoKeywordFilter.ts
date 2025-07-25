@@ -61,7 +61,30 @@ export class VideoKeywordFilter {
   }
 
   filterSearchTerms(searchTerms: string[]): string[] {
-    return searchTerms.filter(term => this.isSearchTermSafe(term));
+    const originalCount = searchTerms.length;
+    const filteredTerms = searchTerms.filter(term => this.isSearchTermSafe(term));
+    const blockedCount = originalCount - filteredTerms.length;
+    
+    logger.info({ 
+      originalTerms: searchTerms,
+      filteredTerms,
+      originalCount, 
+      filteredCount: filteredTerms.length,
+      blockedCount,
+      negativeKeywordsActive: this.negativeKeywords.size
+    }, "Search terms filtering completed");
+    
+    // If ALL terms are blocked, this is likely a configuration issue
+    // Log a warning and provide debugging information
+    if (filteredTerms.length === 0 && originalCount > 0) {
+      logger.warn({ 
+        originalTerms: searchTerms,
+        activeNegativeKeywords: Array.from(this.negativeKeywords),
+        message: "All search terms were blocked by negative keyword filter - this may indicate overly restrictive filtering"
+      }, "All search terms blocked - potential configuration issue");
+    }
+    
+    return filteredTerms;
   }
 
   isVideoSafe(video: Video, metadata?: { title?: string; tags?: string[]; description?: string }): boolean {

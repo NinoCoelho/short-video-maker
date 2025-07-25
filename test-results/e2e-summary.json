@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-07-24T22:29:15.776Z",
+  "totalTests": 2,
+  "passed": 0,
+  "failed": 0,
+  "skipped": 7,
+  "duration": 101965.756,
+  "browser_coverage": {
+    "Library Manager": {
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "failed_tests": []
+}

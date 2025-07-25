@@ -82,8 +82,12 @@ const Dashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get('/api/videos');
-      const videos = response.data;
+      const response = await axios.get('/api/videos', {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      const videos = response.data.data || response.data;
 
       // Calculate stats
       const totalVideos = videos.length;

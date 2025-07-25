@@ -1,0 +1,13 @@
+{
+  "scenes": [
+    {
+      "text": "Test video with inspirational music"
+    }
+  ],
+  "config": {
+    "voice": "Paulo",
+    "language": "pt",
+    "orientation": "portrait",
+    "music": "inspirational"
+  }
+}

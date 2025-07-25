@@ -1,22 +1,31 @@
 import z from "zod";
 
-export enum MusicMoodEnum {
-  sad = "sad",
-  melancholic = "melancholic",
-  happy = "happy",
-  euphoric = "euphoric/high",
-  excited = "excited",
-  chill = "chill",
-  uneasy = "uneasy",
-  angry = "angry",
-  dark = "dark",
-  hopeful = "hopeful",
-  contemplative = "contemplative",
-  funny = "funny/quirky",
-  inspirational = "inspirational",
-  cinematic = "cinematic",
-  worship = "worship",
-}
+// Dynamic music mood system - moods are now managed by LibraryManagerService
+export type MusicMood = string;
+
+// Common mood values for reference (not exhaustive)
+export const COMMON_MUSIC_MOODS = [
+  "sad",
+  "melancholic", 
+  "happy",
+  "euphoric",
+  "excited",
+  "chill",
+  "uneasy",
+  "angry",
+  "dark",
+  "hopeful",
+  "contemplative",
+  "funny",
+  "inspirational",
+  "cinematic",
+  "worship",
+  "epic",
+  "ambient",
+  "energetic",
+  "calm",
+  "dramatic"
+] as const;
 
 export enum CaptionPositionEnum {
   top = "top",
@@ -80,9 +89,9 @@ export const renderConfig = z.object({
       "For how long the video should be playing after the speech is done, in milliseconds. 1500 is a good value.",
     ),
   music: z
-    .nativeEnum(MusicMoodEnum)
+    .string()
     .optional()
-    .describe("Music tag to be used to find the right music for the video"),
+    .describe("Music mood/tag to be used to find the right music for the video"),
   captionPosition: z
     .nativeEnum(CaptionPositionEnum)
     .optional()
@@ -171,7 +180,7 @@ export type MusicForVideo = Music & {
   loop?: boolean;
 };
 
-export type MusicTag = `${MusicMoodEnum}`;
+export type MusicTag = string;
 
 export type kokoroModelPrecision = "fp32" | "fp16" | "q8" | "q4" | "q4f16";
 
@@ -296,7 +305,7 @@ export interface CropConfig {
 
 export interface ImportSettings {
   targetLanguage: string;
-  music?: MusicMoodEnum;
+  music?: MusicMood;
   overlay?: string;
   orientation: OrientationEnum;
   autoHighlights: boolean;

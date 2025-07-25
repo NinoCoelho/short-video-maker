@@ -1,4 +1,4 @@
-import { RenderConfig, SceneInput, ImportedVideo, VideoSegment, ImportSettings } from "../../types/shorts";
+import { RenderConfig, SceneInput, ImportedVideo, ImportVideoSegment, ImportSettings } from "../../types/shorts";
 
 export interface QueueItem {
   id: string;
@@ -12,7 +12,7 @@ export interface QueueItem {
 export interface ImportQueueItem extends QueueItem {
   type: "import";
   importedVideo: ImportedVideo;
-  videoSegments: VideoSegment[];
+  videoSegments: ImportVideoSegment[];
   importSettings: ImportSettings;
   originalScenes?: SceneInput[]; // Backup of original scenes before import conversion
 } 

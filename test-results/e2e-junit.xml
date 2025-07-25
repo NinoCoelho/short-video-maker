@@ -1,0 +1,103 @@
+<testsuites id="" name="" tests="10" failures="1" skipped="7" errors="0" time="101.965756">
+<testsuite name="library-manager.spec.ts" timestamp="2025-07-24T22:03:12.949Z" hostname="chromium" tests="10" failures="1" skipped="7" time="34.62" errors="0">
+<testcase name="Library Manager › should display library statistics" classname="library-manager.spec.ts" time="1.419">
+</testcase>
+<testcase name="Library Manager › should upload a music file" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should edit asset metadata" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should download an asset" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should delete an asset" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should position context menu correctly" classname="library-manager.spec.ts" time="31.806">
+<failure message="library-manager.spec.ts:137:7 should position context menu correctly" type="FAILURE">
+<![CDATA[  [chromium] › library-manager.spec.ts:137:7 › Library Manager › should position context menu correctly 
+
+    TimeoutError: locator.boundingBox: Timeout 30000ms exceeded.
+    Call log:
+      - waiting for locator('.MuiCard-root').first().locator('button:has(svg[data-testid="MoreVertIcon"])')
+
+
+      145 |       
+      146 |       // Get button position
+    > 147 |       const buttonBox = await moreButton.boundingBox();
+          |                                          ^
+      148 |       expect(buttonBox).toBeTruthy();
+      149 |       
+      150 |       // Click to open menu
+        at /Users/nino/CursorProjects/short-video-maker/tests/e2e/library-manager.spec.ts:147:42
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/e2e-artifacts/library-manager-Library-Ma-601a1-tion-context-menu-correctly-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/e2e-artifacts/library-manager-Library-Ma-601a1-tion-context-menu-correctly-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/e2e-artifacts/library-manager-Library-Ma-601a1-tion-context-menu-correctly-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|e2e-artifacts/library-manager-Library-Ma-601a1-tion-context-menu-correctly-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|e2e-artifacts/library-manager-Library-Ma-601a1-tion-context-menu-correctly-chromium/video.webm]]
+
+[[ATTACHMENT|e2e-artifacts/library-manager-Library-Ma-601a1-tion-context-menu-correctly-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Library Manager › should filter assets by type" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should search assets" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should play audio preview" classname="library-manager.spec.ts" time="0">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Library Manager › should handle empty library state" classname="library-manager.spec.ts" time="1.395">
+</testcase>
+</testsuite>
+</testsuites>

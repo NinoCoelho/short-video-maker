@@ -16,6 +16,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run tts:service` - Run Python TTS service (requires `pip install -r requirements.txt`)
 - Port 3122 - Remotion video rendering server (auto-started with dev)
 
+### Testing Commands
+- `npm test` - Run unit tests with Vitest
+- `npm run test:e2e` - Run end-to-end tests
+- `npm run test:performance` - Run performance tests
+- `npm run test:performance:report` - Generate performance report
+
+### Performance Monitoring
+- `npm run performance:start` - Start performance monitoring
+- `npm run performance:stop` - Stop monitoring
+- `npm run performance:report` - Generate performance report
+- `npm run performance:baseline` - Set performance baseline
+- `npm run performance:health` - Check system health
+
 ### Docker
 - `npm run publish:docker` - Build all Docker variants
 - `npm run publish:docker:normal` - Standard image
@@ -38,6 +51,9 @@ This is a monolithic application for creating short-form videos (TikTok, Instagr
 - `EventBus` pattern for internal communication between services
 - WebSocket server for real-time client updates
 - Queue system for video processing with retry logic
+- Download events (progress, status, complete, error)
+- Scene processing events
+- Memory-efficient weak references
 
 #### Service Layer Architecture
 ```
@@ -46,7 +62,8 @@ src/
 │   ├── events/          # Event system (EventBus)
 │   ├── routers/         # API routers (REST, MCP)
 │   ├── websocket/       # Real-time updates
-│   └── routes/          # Individual endpoints
+│   ├── routes/          # Individual endpoints
+│   └── middleware/      # Security, validation, rate limiting
 ├── short-creator/       # Core video creation logic
 │   ├── libraries/       # External integrations
 │   │   ├── FFmpeg/      # Video/audio processing
@@ -54,9 +71,18 @@ src/
 │   │   └── Videos/      # Background video providers
 │   └── utils/           # Helper functions
 ├── services/            # Shared services
-│   ├── FileService      # File operations
-│   ├── QueueService     # Video processing queue
-│   └── StatusService    # Video status management
+│   ├── LibraryManagerService # Music and overlay asset management
+│   ├── TranslationService # Multi-provider translation
+│   ├── QueueService     # Priority-based processing queue
+│   ├── StatusService    # Video status management
+│   ├── TranscriptionService # Video-to-text conversion
+│   ├── DownloadProcessor # Platform-specific downloads
+│   └── downloaders/     # YouTube, TikTok, Instagram, etc.
+├── database/            # PostgreSQL migrations & queries
+│   └── migrations/      # Schema versioning
+├── performance/         # Performance monitoring system
+│   ├── analyzers/       # CPU, Memory, IO, Network analysis
+│   └── reports/         # Performance reports & baselines
 └── ui/                  # React frontend
     ├── pages/           # Main application pages
     ├── components/      # Reusable UI components
@@ -79,6 +105,9 @@ src/
 - `/api/generate-tts` - Generate audio
 - `/api/replace-scene-video` - Replace background video
 - `/api/regenerate-scene-audio` - Regenerate scene audio
+- `/api/library/*` - Library manager endpoints for assets and collections
+- `/api/translate` - Translate text with multiple providers
+- `/api/translate/batch` - Batch translation
 
 #### MCP Server (`/mcp/*`)
 - SSE endpoint: `/mcp/sse`
@@ -90,6 +119,10 @@ src/
 - `video-status` - Progress updates
 - `video-complete` - Rendering finished
 - `video-error` - Error notifications
+- `download-progress` - Download progress updates
+- `download-complete` - Download finished
+- `download-error` - Download failed
+- `queue-update` - Queue status changes
 
 ### Key Technical Decisions
 
@@ -98,17 +131,43 @@ src/
 - Virtual scrolling in UI for large lists
 - Debounced search and filtering
 - React.memo and useCallback for render optimization
+- Translation caching to reduce API costs
+- Priority-based queue processing
+- Real-time performance monitoring system
+- Memory leak detection and prevention
+
+#### Security Features
+- Path traversal protection for file operations
+- SSRF protection with domain allowlisting
+- API key validation middleware
+- Rate limiting per endpoint
+- Input validation with Joi schemas
+- Request sanitization to prevent prototype pollution
 
 #### Error Handling
 - Comprehensive error boundaries in React
-- Retry logic for failed video downloads
+- Retry logic with exponential backoff
 - Graceful degradation for TTS providers
 - Detailed error logging with Winston
+- Fallback providers for translation
+- Error recovery in download system
+
+#### Library Manager
+- **Asset Management**: Upload, organize, and manage music files and overlay images
+- **Collections**: Group assets into organized collections by type and purpose
+- **Metadata**: Track titles, tags, moods, file sizes, and other properties
+- **Preview System**: Audio playback for music, image preview for overlays
+- **API Integration**: RESTful API for programmatic asset management
+- **File Validation**: MIME type checking and format validation
+- **Storage**: Assets stored in `static/music/` and `static/overlays/` directories
+- **Database**: Metadata stored in JSON files in `data/library/` directory
 
 #### Testing Approach
 - Vitest for unit tests
+- Playwright for E2E tests
+- Performance tests with memory analysis
 - Test files co-located with source
-- Focus on core business logic (ShortCreator)
+- Integration tests for services
 - Run with `npm test`
 
 ### Working with the Codebase
@@ -118,12 +177,19 @@ src/
 2. For API endpoints: Add to `src/server/routes` and update router
 3. For video processing: Modify `src/short-creator/ShortCreator.ts`
 4. For real-time features: Use EventBus and WebSocket patterns
+6. For translation: Add providers to `TranslationService`
+7. For asset management: Use `LibraryManagerService` for music and overlay operations
+8. For security: Add middleware to `src/server/middleware/security.ts`
 
 #### Common Tasks
 - **Add new TTS provider**: Implement interface in `src/short-creator/libraries/TTS/`
 - **Add video source**: Create provider in `src/short-creator/libraries/Videos/`
 - **Modify video template**: Edit Remotion components in `src/components/`
 - **Add MCP tool**: Update `src/server/routers/mcpRouter.ts`
+- **Add platform downloader**: Create in `src/services/downloaders/`
+- **Add translation provider**: Implement in `TranslationService`
+- **Manage music/overlays**: Use Library Manager UI at `/library-manager` or API at `/api/library/*`
+- **Add performance metric**: Update analyzers in `performance/analyzers/`
 
 #### Environment Variables
 Key variables to configure:
@@ -131,9 +197,20 @@ Key variables to configure:
 - `REMOTION_HOST` - Remotion server host
 - `NODE_ENV` - Environment mode
 - API keys for AI providers (OpenAI, Google)
+- `GOOGLE_TRANSLATE_API_KEY` - Google Cloud Translate
+- `DEEPL_API_KEY` - DeepL translation
+- `DATABASE_URL` - PostgreSQL connection string
+- `PERFORMANCE_MONITORING_ENABLED` - Enable performance monitoring
+- `SECURITY_RATE_LIMIT_*` - Rate limiting configuration
 
 #### TypeScript Configuration
 - Strict mode enabled
 - ES2022 target
 - Two configs: main and build-specific
 - Type definitions in `src/types/`
+
+#### Database Management
+- Migrations in `src/database/migrations/`
+- Run migrations: `npm run db:migrate`
+- Rollback: `npm run db:rollback`
+- Schema includes: videos, transcriptions, translations, segments

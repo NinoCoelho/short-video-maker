@@ -1,0 +1,73 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - button
+  - button "3"
+- navigation "mailbox folders":
+  - text: Short Video Maker
+  - paragraph: Criador de vídeos curtos com IA
+  - paragraph: Ações Rápidas
+  - button "Novo Vídeo"
+  - button "Script IA"
+  - button "Library"
+  - list:
+    - listitem:
+      - button "Dashboard Visão geral e estatísticas":
+        - text: Dashboard
+        - paragraph: Visão geral e estatísticas
+    - listitem:
+      - button "Video Studio Criar novos vídeos":
+        - text: Video Studio
+        - paragraph: Criar novos vídeos
+    - listitem:
+      - button "IA Scripts Gerador de roteiros com IA":
+        - text: IA Scripts
+        - paragraph: Gerador de roteiros com IA
+    - listitem:
+      - button "Biblioteca Gerenciar vídeos":
+        - text: Biblioteca
+        - paragraph: Gerenciar vídeos
+    - listitem:
+      - button "TTS Studio Geração de áudio":
+        - text: TTS Studio
+        - paragraph: Geração de áudio
+    - listitem:
+      - button "Library Manager Gerenciar assets de música e overlays":
+        - text: Library Manager
+        - paragraph: Gerenciar assets de música e overlays
+  - separator
+  - list:
+    - listitem:
+      - button "Configurações Configurações do sistema":
+        - text: Configurações
+        - paragraph: Configurações do sistema
+    - listitem:
+      - button "API Docs Documentação das APIs":
+        - text: API Docs
+        - paragraph: Documentação das APIs
+  - text: U
+  - paragraph: Usuário
+  - text: Criador de conteúdo
+- main:
+  - heading "Library Manager" [level=1]
+  - button "Upload Asset"
+  - heading "Library Statistics" [level=6]
+  - heading "0" [level=4]
+  - paragraph: Total Assets
+  - heading "0" [level=4]
+  - paragraph: Music Files
+  - heading "0" [level=4]
+  - paragraph: Overlays
+  - heading "0 Bytes" [level=4]
+  - paragraph: Total Size
+  - textbox "Search assets..."
+  - text: Type
+  - combobox: All
+  - text: Mood
+  - combobox
+  - alert: Failed to load assets. Please try again.
+  - heading "No assets found" [level=6]
+  - paragraph: Start by uploading some music or overlay files
+  - button "Upload Your First Asset"
+```

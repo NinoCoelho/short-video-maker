@@ -2,7 +2,11 @@ import express, { Request, Response } from 'express';
 import { TranslationService, TranslationOptions } from '../../services/TranslationService';
 import { TranscriptionService } from '../../services/TranscriptionService';
 import { logger } from '../../logger';
-import { TranscriptSegment } from '../../types/import';
+interface TranscriptSegment {
+  startTime: number;
+  endTime: number;
+  text: string;
+}
 import path from 'path';
 import fs from 'fs-extra';
 

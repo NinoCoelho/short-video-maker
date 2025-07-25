@@ -1,4 +1,4 @@
-import { ImportVideoSegment as VideoSegment, Scene, SceneInput, RenderConfig, OrientationEnum, Caption, ImportedVideo, TranscriptionSegment } from "../../types/shorts";
+import { ImportVideoSegment, Scene, SceneInput, RenderConfig, OrientationEnum, Caption, ImportedVideo, TranscriptionSegment } from "../../types/shorts";
 import { logger } from "../../logger";
 import cuid from "cuid";
 
@@ -9,7 +9,7 @@ export class ImportConverter {
    * Preserves quality settings and aspect ratios
    */
   static convertSegmentsToScenes(
-    segments: VideoSegment[],
+    segments: ImportVideoSegment[],
     importedVideo: ImportedVideo,
     config: RenderConfig
   ): Scene[] {
@@ -49,7 +49,7 @@ export class ImportConverter {
    * This preserves the imported video references and metadata
    */
   static convertSegmentsToSceneInputs(
-    segments: VideoSegment[],
+    segments: ImportVideoSegment[],
     importedVideo: ImportedVideo,
     config: RenderConfig
   ): SceneInput[] {
@@ -91,7 +91,7 @@ export class ImportConverter {
   }
 
   private static convertSingleSegmentToScene(
-    segment: VideoSegment,
+    segment: ImportVideoSegment,
     importedVideo: ImportedVideo,
     config: RenderConfig
   ): Scene {
@@ -130,7 +130,7 @@ export class ImportConverter {
     return scene;
   }
 
-  private static buildSegmentVideoUrl(importedVideo: ImportedVideo, segment: VideoSegment): string {
+  private static buildSegmentVideoUrl(importedVideo: ImportedVideo, segment: ImportVideoSegment): string {
     // Build URL that includes segment timing and crop information
     let videoUrl = `/api/imported-video/${importedVideo.id}`;
     
@@ -245,7 +245,7 @@ export class ImportConverter {
    */
   static mapImportMetadataToRenderFormat(
     importedVideo: ImportedVideo,
-    segments: VideoSegment[],
+    segments: ImportVideoSegment[],
     config: RenderConfig
   ): {
     preservedQuality: boolean;

@@ -1,0 +1,28 @@
+[
+  {
+    "id": "test-youtube-video-1",
+    "url": "https://www.youtube.com/watch?v=test1234567890",
+    "title": "Test Video 1 - Short Content",
+    "duration": 120,
+    "platform": "YouTube",
+    "thumbnailUrl": "https://img.youtube.com/vi/test1234567890/maxresdefault.jpg",
+    "description": "A test video for E2E testing"
+  },
+  {
+    "id": "test-youtube-video-2",
+    "url": "https://www.youtube.com/watch?v=test0987654321",
+    "title": "Test Video 2 - Long Content",
+    "duration": 600,
+    "platform": "YouTube",
+    "thumbnailUrl": "https://img.youtube.com/vi/test0987654321/maxresdefault.jpg",
+    "description": "A longer test video for batch import testing"
+  },
+  {
+    "id": "test-direct-video",
+    "url": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+    "title": "Direct MP4 Video",
+    "duration": 30,
+    "platform": "Direct",
+    "description": "Direct video file for testing"
+  }
+]

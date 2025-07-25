@@ -1,0 +1,38 @@
+[
+  {
+    "event": "import-progress",
+    "data": {
+      "jobId": "test-job-123",
+      "status": "processing",
+      "progress": 25,
+      "currentStep": "Downloading video"
+    }
+  },
+  {
+    "event": "import-progress",
+    "data": {
+      "jobId": "test-job-123",
+      "status": "processing",
+      "progress": 50,
+      "currentStep": "Transcribing audio"
+    }
+  },
+  {
+    "event": "import-progress",
+    "data": {
+      "jobId": "test-job-123",
+      "status": "processing",
+      "progress": 75,
+      "currentStep": "Detecting scenes"
+    }
+  },
+  {
+    "event": "import-complete",
+    "data": {
+      "jobId": "test-job-123",
+      "status": "completed",
+      "progress": 100,
+      "videoId": "test-video-123"
+    }
+  }
+]

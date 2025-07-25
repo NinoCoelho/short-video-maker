@@ -173,6 +173,25 @@ export class WebSocketServer {
       });
     });
 
+    // Listen for import handoff events
+    eventBus.on('import:handoff-complete', (data) => {
+      const { videoId, originalVideoId } = data;
+      
+      // Notify import subscribers of completion
+      this.io.to(`import-${originalVideoId}`).emit('import-handoff-complete', data);
+      
+      // Bridge subscription from import room to video room
+      this.bridgeSubscriptions(originalVideoId, videoId);
+    });
+
+    // Listen for video render start events
+    eventBus.on('video:render:start', (data) => {
+      this.broadcastToVideoSubscribers(data.videoId, 'video-render-start', {
+        ...data,
+        timestamp: new Date().toISOString()
+      });
+    });
+
     // Listen for download progress events
     eventBus.on('download:progress', (event) => {
       const eventData = {
@@ -257,6 +276,29 @@ export class WebSocketServer {
   broadcastToDownloadSubscribers(jobId: string, event: string, data: any) {
     this.io.to(`download-${jobId}`).emit(event, data);
     logger.debug({ jobId, event, data }, 'WebSocket download broadcast');
+  }
+
+  // Bridge method for subscription transfer
+  private bridgeSubscriptions(importJobId: string, videoId: string): void {
+    const importRoom = `import-${importJobId}`;
+    const videoRoom = `video-${videoId}`;
+    
+    // Get all sockets in import room
+    const importSockets = this.io.sockets.adapter.rooms.get(importRoom);
+    
+    if (importSockets) {
+      importSockets.forEach(socketId => {
+        const socket = this.io.sockets.sockets.get(socketId);
+        if (socket) {
+          // Subscribe to video room
+          socket.join(videoRoom);
+          // Keep import room for final cleanup
+        }
+      });
+    }
+    
+    logger.info({ importJobId, videoId, subscriberCount: importSockets?.size || 0 }, 
+      'Bridged WebSocket subscriptions from import to video room');
   }
 
   // Cleanup methods

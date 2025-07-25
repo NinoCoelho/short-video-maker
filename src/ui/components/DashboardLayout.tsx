@@ -32,10 +32,20 @@ import {
   Notifications as NotificationsIcon,
   Search as SearchIcon,
   Add as AddIcon,
-  Upload as UploadIcon,
+  LibraryBooks as LibraryIcon,
+  Psychology as PsychologyIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 280;
+
+interface MenuItem {
+  text: string;
+  icon: React.ReactElement;
+  path: string;
+  description: string;
+  isNew?: boolean;
+  isBeta?: boolean;
+}
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -51,7 +61,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     setMobileOpen(!mobileOpen);
   };
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     {
       text: 'Dashboard',
       icon: <DashboardIcon />,
@@ -66,18 +76,18 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       isNew: true,
     },
     {
-      text: 'Import Video',
-      icon: <UploadIcon />,
-      path: '/import',
-      description: 'Importar vídeos externos',
-      isNew: true,
-    },
-    {
       text: 'IA Scripts',
       icon: <AIIcon />,
       path: '/ai-scripts',
       description: 'Gerador de roteiros com IA',
       isNew: true,
+    },
+    {
+      text: 'IA Script Studio',
+      icon: <PsychologyIcon />,
+      path: '/ia-script-studio',
+      description: 'Chat avançado com arquivos',
+      isBeta: true,
     },
     {
       text: 'Biblioteca',
@@ -91,9 +101,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       path: '/tts',
       description: 'Geração de áudio',
     },
+    {
+      text: 'Library Manager',
+      icon: <LibraryIcon />,
+      path: '/library-manager',
+      description: 'Gerenciar assets de música e overlays',
+      isNew: true,
+    },
   ];
 
-  const utilityItems = [
+  const utilityItems: MenuItem[] = [
     {
       text: 'Configurações',
       icon: <SettingsIcon />,
@@ -162,23 +179,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               }}
             />
             <Chip
-              icon={<UploadIcon />}
-              label="Importar"
-              size="small"
-              onClick={() => navigate('/import')}
-              sx={{
-                background: theme.palette.secondary.main,
-                color: 'white',
-                '&:hover': {
-                  background: theme.palette.secondary.dark,
-                },
-              }}
-            />
-            <Chip
               icon={<AIIcon />}
               label="Script IA"
               size="small"
               onClick={() => navigate('/ai-scripts')}
+              variant="outlined"
+            />
+            <Chip
+              icon={<LibraryIcon />}
+              label="Library"
+              size="small"
+              onClick={() => navigate('/library-manager')}
               variant="outlined"
             />
           </Box>
@@ -212,6 +223,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               >
                 {item.isNew ? (
                   <Badge badgeContent="NEW" color="secondary" variant="dot">
+                    {item.icon}
+                  </Badge>
+                ) : item.isBeta ? (
+                  <Badge badgeContent="BETA" color="info" variant="dot">
                     {item.icon}
                   </Badge>
                 ) : (
@@ -258,6 +273,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               >
                 {item.isNew ? (
                   <Badge badgeContent="NEW" color="secondary" variant="dot">
+                    {item.icon}
+                  </Badge>
+                ) : item.isBeta ? (
+                  <Badge badgeContent="BETA" color="info" variant="dot">
                     {item.icon}
                   </Badge>
                 ) : (

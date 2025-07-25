@@ -97,7 +97,7 @@ export const VideoStatus: React.FC<VideoStatusProps> = ({
   const fetchStatus = async () => {
     try {
       const response = await axios.get(`/api/status/${videoId}`);
-      const newStatus = response.data;
+      const newStatus = response.data.data || response.data;
       setStatus(newStatus);
       setError(null);
       setLastFetchTime(Date.now());

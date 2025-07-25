@@ -1,0 +1,13 @@
+{
+  "scenes": [
+    {
+      "text": "Test video with invalid mood"
+    }
+  ],
+  "config": {
+    "voice": "Paulo",
+    "language": "pt",
+    "orientation": "portrait",
+    "music": "nonexistent"
+  }
+}

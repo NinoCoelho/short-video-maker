@@ -2,6 +2,7 @@ import fs from "fs-extra";
 import path from "path";
 import { Config } from "../config";
 import { logger } from "../logger";
+import { eventBus } from "../server/events/EventBus";
 
 export type VideoStatus = "pending" | "processing" | "ready" | "failed";
 
@@ -26,6 +27,8 @@ export enum ImportStage {
   ANALYZING = "analyzing",
   SEGMENTING = "segmenting",
   CONVERTING = "converting",
+  TRANSITIONING_TO_RENDER = "transitioning_to_render",
+  RENDER_QUEUED = "render_queued",
   RENDERING = "rendering"
 }
 
@@ -417,15 +420,28 @@ export class VideoStatusManager {
         currentData = existingData;
       }
 
-      const data: VideoStatusObject = { 
-        ...currentData,
-        importStage: ImportStage.RENDERING,
-        stage: 'Transitioning to render pipeline',
-        message: 'Import completed, starting video rendering'
-      };
+      // Set import completion
+      await this.setImportStage(
+        videoId,
+        ImportStage.TRANSITIONING_TO_RENDER,
+        100,
+        "Import complete, starting video generation"
+      );
+      
+      // Bridge to video status system
+      await this.setStatus(
+        videoId,
+        "processing",
+        "Generating short video",
+        0,
+        "initializing"
+      );
+      
+      // Emit transition events
+      eventBus.emit('import:complete', { videoId });
+      eventBus.emit('video:render:start', { videoId });
 
-      await this.safeWriteJson(filePath, data);
-      logger.info({ videoId }, "Transitioned import to render pipeline.");
+      logger.info({ videoId }, "Transitioned import to render pipeline with events emitted.");
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Unknown error";
       logger.error({ videoId, error: errorMessage }, "Failed to transition to render pipeline.");

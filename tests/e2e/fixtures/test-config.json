@@ -1,0 +1,10 @@
+{
+  "testMode": true,
+  "mockExternalServices": true,
+  "mockVideoDownloads": true,
+  "skipActualVideoProcessing": true,
+  "fastMode": true,
+  "logLevel": "debug",
+  "websocketEnabled": true,
+  "testTimeout": 120000
+}

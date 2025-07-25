@@ -12,19 +12,23 @@ import { MCPRouter } from "./routers/mcp";
 import { logger } from "../logger";
 import { Config } from "../config";
 import referenceAudioRouter from "./routes/referenceAudio";
-import { importRouter, ollamaRouter, translationRouter } from "./routes/importRoutes";
 import { VideoStatusManager } from "../short-creator/VideoStatusManager";
 import { WebSocketServer } from "./websocket/WebSocketServer";
-import { setupDownloadRoutes } from "../services/downloadSystemIntegration";
+// import { setupDownloadRoutes } from "../services/downloadSystemIntegration";
 import { TranslationService } from "../services/TranslationService";
 import { TranscriptionService } from "../services/TranscriptionService";
+import { LibraryManagerService } from "../services/LibraryManagerService";
+import { createLibraryRouter } from "./routes/libraryRoutes";
+import { createIAScriptRouter } from "./routes/iaScriptRoutes";
+import { ServiceContainer } from "../services/ServiceContainer";
 import type { DownloadSystem } from "../services/initializeDownloadSystem";
+import { Pool } from 'pg';
+import { SQLiteAdapter, SQLitePool } from '../database/SQLiteAdapter';
 import { 
   createRateLimiter,
   sanitizeRequest,
   PathTraversalGuard,
   URLValidator,
-  secureFileUpload
 } from "./middleware/security";
 import { 
   globalErrorHandler, 
@@ -44,8 +48,12 @@ export class Server {
   private downloadSystem?: DownloadSystem;
   private translationService?: TranslationService;
   private transcriptionService?: TranscriptionService;
+  private libraryManager?: LibraryManagerService;
+  private databasePool?: Pool | SQLitePool;
+  private readonly projectRoot: string;
 
-  constructor(config: Config, shortCreator: ShortCreator, downloadSystem?: DownloadSystem) {
+  constructor(config: Config, shortCreator: ShortCreator, downloadSystem?: DownloadSystem, projectRoot?: string) {
+    this.projectRoot = projectRoot || process.cwd(); // Use provided projectRoot or fallback to cwd
     this.config = config;
     this.shortCreator = shortCreator;
     this.downloadSystem = downloadSystem;
@@ -59,29 +67,50 @@ export class Server {
       res.status(200).json({ status: "ok" });
     });
 
-    // Initialize translation and transcription services
-    this.initializeServices();
+    // Initialize services will be called in start() method
+    // Routes will be setup after services are initialized
 
-    this.videoStatusManager = new VideoStatusManager(config);
+    // Set up global error handlers
+    this.setupGlobalErrorHandlers();
+  }
+
+  private setupRoutes(): void {
+    this.videoStatusManager = new VideoStatusManager(this.config);
+    
+    // Register videoStatusManager in service container and create ImportService
+    const container = ServiceContainer.getInstance();
+    container.register('statusManager', this.videoStatusManager);
+    
     const apiRouter = new APIRouter(
-      config, 
+      this.config, 
       this.shortCreator, 
       this.videoStatusManager,
       this.translationService,
       this.transcriptionService
     );
-    const mcpRouter = new MCPRouter(shortCreator);
+    const mcpRouter = new MCPRouter(this.shortCreator);
     this.app.use("/api", apiRouter.router);
     this.app.use("/mcp", mcpRouter.router);
     this.app.use("/api/reference-audio", referenceAudioRouter);
-    this.app.use("/api/import", importRouter);
-    this.app.use("/api/ollama", ollamaRouter);
-    this.app.use("/api/translation", translationRouter);
+    
+    // Setup library routes if library manager is available
+    if (this.libraryManager) {
+      this.app.use("/api/library", createLibraryRouter(this.libraryManager, this.projectRoot));
+      logger.info("Library manager routes initialized");
+    }
+
+    // Setup IA Script routes if database pool is available
+    if (this.databasePool) {
+      this.app.use("/api/ia-script", createIAScriptRouter(this.databasePool, this.shortCreator));
+      logger.info("IA Script routes initialized");
+    } else {
+      logger.warn("Database pool not available, IA Script routes disabled");
+    }
 
     // Setup download routes if download system is available
     if (this.downloadSystem) {
-      setupDownloadRoutes(apiRouter.router);
-      logger.info("Download system routes initialized");
+      // setupDownloadRoutes(apiRouter.router);
+      logger.info("Download system routes disabled temporarily");
     }
 
     // Serve temporary files with path validation
@@ -107,7 +136,6 @@ export class Server {
     const projectRoot = path.resolve(__dirname, '../..');
     
     // Static files are now properly served from the correct project root
-
     this.app.use('/music', corsMiddleware, express.static(path.join(projectRoot, 'static/music')));
     this.app.use('/overlays', corsMiddleware, express.static(path.join(projectRoot, 'static/overlays')));
     this.app.use('/fonts', corsMiddleware, express.static(path.join(projectRoot, 'fonts')));
@@ -115,13 +143,32 @@ export class Server {
     // Error handling middleware (must be last)
     this.app.use(notFoundHandler);
     this.app.use(globalErrorHandler);
-
-    // Set up global error handlers
-    this.setupGlobalErrorHandlers();
   }
 
   private setupSecurityMiddleware(): void {
-    // Request sanitization - must be first
+    // CORS configuration - must be before other middleware
+    this.app.use((req: ExpressRequest, res: ExpressResponse, next: express.NextFunction) => {
+      const origin = req.headers.origin;
+      
+      // Allow requests from localhost:3232 (frontend dev server)
+      if (origin && (origin.includes('localhost:3232') || origin.includes('127.0.0.1:3232'))) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Range');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Max-Age', '3600');
+      }
+      
+      // Handle preflight requests
+      if (req.method === 'OPTIONS') {
+        res.sendStatus(204);
+        return;
+      }
+      
+      next();
+    });
+    
+    // Request sanitization - must be after CORS
     this.app.use(sanitizeRequest);
     
     // Body parsing with size limits
@@ -129,23 +176,21 @@ export class Server {
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     
     // Rate limiting - different limits for different endpoints
+    // More lenient in development mode
+    const isDev = process.env.NODE_ENV === 'development';
+    
     const generalLimiter = createRateLimiter({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      maxRequests: 100, // 100 requests per 15 minutes
+      maxRequests: isDev ? 1000 : 100, // More requests in dev mode
       message: 'Too many requests from this IP, please try again later.'
     });
     
     const strictLimiter = createRateLimiter({
       windowMs: 5 * 60 * 1000, // 5 minutes
-      maxRequests: 10, // 10 requests per 5 minutes for resource-intensive endpoints
+      maxRequests: isDev ? 100 : 10, // More requests in dev mode
       message: 'Too many resource-intensive requests, please try again later.'
     });
     
-    const uploadLimiter = createRateLimiter({
-      windowMs: 10 * 60 * 1000, // 10 minutes
-      maxRequests: 5, // 5 uploads per 10 minutes
-      message: 'Too many upload requests, please try again later.'
-    });
     
     // Apply general rate limiting to all routes
     this.app.use(generalLimiter);
@@ -157,9 +202,6 @@ export class Server {
     this.app.use('/api/search-background-videos', strictLimiter);
     this.app.use('/api/create-video-from-script', strictLimiter);
     
-    // Upload rate limiting
-    this.app.use('/api/upload', uploadLimiter);
-    this.app.use('/api/import', uploadLimiter);
     
     // CORS security headers
     this.app.use((req: ExpressRequest, res: ExpressResponse, next: express.NextFunction) => {
@@ -197,13 +239,16 @@ export class Server {
     // Handle unhandled promise rejections
     process.on('unhandledRejection', unhandledRejectionHandler);
 
-    // Handle graceful shutdown signals
-    process.on('SIGTERM', gracefulShutdownHandler(this.httpServer));
-    process.on('SIGINT', gracefulShutdownHandler(this.httpServer));
+    // Graceful shutdown handlers will be set up after server is created
   }
 
-  private initializeServices(): void {
+  private async initializeServices(): Promise<void> {
     try {
+      // Initialize service container with all dependencies
+      const container = ServiceContainer.getInstance();
+      container.register('shortCreator', this.shortCreator);
+      container.register('globalConfig', this.config);
+      
       // Initialize Translation Service with API keys from environment
       const apiKeys = {
         openai: process.env.OPENAI_API_KEY,
@@ -218,6 +263,7 @@ export class Server {
           this.config.dataDirPath,
           apiKeys
         );
+        container.register('translationService', this.translationService);
         logger.info('Translation service initialized');
       } else {
         logger.warn('No translation API keys found, translation service disabled');
@@ -225,9 +271,59 @@ export class Server {
 
       // Initialize Transcription Service
       this.transcriptionService = new TranscriptionService(this.config.dataDirPath);
+      container.register('transcriptionService', this.transcriptionService);
       logger.info('Transcription service initialized');
+
+      // Initialize Library Manager Service
+      this.libraryManager = new LibraryManagerService(this.projectRoot);
+      await this.libraryManager.initialize();
+      container.register('libraryManager', this.libraryManager);
+      logger.info('Library manager service initialized');
+      
+      // Initialize Database - Use SQLite by default, PostgreSQL if configured
+      if (process.env.DATABASE_URL || process.env.DB_HOST) {
+        // Use PostgreSQL if configured
+        try {
+          const poolConfig = process.env.DATABASE_URL ? {
+            connectionString: process.env.DATABASE_URL,
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+          } : {
+            host: process.env.DB_HOST || 'localhost',
+            port: parseInt(process.env.DB_PORT || '5432'),
+            database: process.env.DB_NAME || 'short_video_maker',
+            user: process.env.DB_USER || 'postgres',
+            password: process.env.DB_PASSWORD || '',
+            max: 20, // Maximum number of clients in the pool
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 2000,
+          };
+          
+          this.databasePool = new Pool(poolConfig);
+          
+          // Test connection
+          await this.databasePool.query('SELECT 1');
+          container.register('databasePool', this.databasePool);
+          logger.info('PostgreSQL database pool initialized successfully');
+        } catch (error) {
+          logger.error('Failed to initialize PostgreSQL pool:', error);
+          logger.warn('Falling back to SQLite database');
+          // Fall back to SQLite
+          this.databasePool = new SQLiteAdapter(this.config.dataDirPath);
+          container.register('databasePool', this.databasePool);
+          logger.info('SQLite database initialized as fallback');
+        }
+      } else {
+        // Use SQLite by default
+        logger.info('Using SQLite database for IA Script features');
+        this.databasePool = new SQLiteAdapter(this.config.dataDirPath);
+        container.register('databasePool', this.databasePool);
+        logger.info('SQLite database initialized successfully');
+      }
+      
+      logger.info({ registeredServices: container.getRegisteredServices() }, 'Service container initialized');
     } catch (error) {
       logger.error({ error }, 'Failed to initialize translation/transcription services');
+      throw error;
     }
   }
 
@@ -305,6 +401,12 @@ export class Server {
   public async start(): Promise<void> {
     const port = Number(process.env.PORT) || 3233;
     
+    // Initialize services first
+    await this.initializeServices();
+    
+    // Setup routes after services are initialized
+    this.setupRoutes();
+    
     await this.cancelOngoingRenders();
 
     try {
@@ -325,6 +427,11 @@ export class Server {
             this.httpServer.listen(port, "0.0.0.0", () => {
               logger.info(`🚀 Server running on http://0.0.0.0:${port}`);
               logger.info(`🔌 WebSocket server initialized`);
+              
+              // Set up graceful shutdown handlers now that server is created
+              process.on('SIGTERM', gracefulShutdownHandler(this.httpServer));
+              process.on('SIGINT', gracefulShutdownHandler(this.httpServer));
+              
               // Envia sinal de ready para o PM2
               if (process.send) {
                 process.send('ready');

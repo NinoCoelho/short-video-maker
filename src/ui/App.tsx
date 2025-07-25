@@ -11,13 +11,14 @@ import DashboardLayout from './components/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import VideoStudio from './pages/VideoStudio';
 import AIScriptGenerator from './pages/AIScriptGenerator';
+import IAScriptStudio from './pages/IAScriptStudio';
 import VideoLibrary from './pages/VideoLibrary';
 import TTSStudio from './pages/TTSStudio';
 import VideoEditor from './pages/VideoEditor';
 import VideoDetails from './pages/VideoDetails';
+import LibraryManager from './pages/LibraryManager';
 import Settings from './pages/Settings';
 import ApiDocumentation from './pages/ApiDocumentation';
-import VideoImporter from './pages/VideoImporter';
 
 // Create theme
 const theme = createTheme({
@@ -119,11 +120,12 @@ const App: React.FC = () => {
               <Route path="/" element={<Dashboard />} />
               <Route path="/studio" element={<VideoStudio />} />
               <Route path="/ai-scripts" element={<AIScriptGenerator />} />
+              <Route path="/ia-script-studio" element={<IAScriptStudio />} />
               <Route path="/library" element={<VideoLibrary />} />
               <Route path="/tts" element={<TTSStudio />} />
               <Route path="/video/:id" element={<VideoDetails />} />
               <Route path="/edit/:id" element={<VideoEditor />} />
-              <Route path="/import" element={<VideoImporter />} />
+              <Route path="/library-manager" element={<LibraryManager />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/api-docs" element={<ApiDocumentation />} />
             </Routes>

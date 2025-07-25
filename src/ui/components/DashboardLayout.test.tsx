@@ -63,7 +63,6 @@ describe('DashboardLayout', () => {
       // Check main menu items
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
       expect(screen.getByText('Video Studio')).toBeInTheDocument();
-      expect(screen.getByText('Import Video')).toBeInTheDocument();
       expect(screen.getByText('IA Scripts')).toBeInTheDocument();
       expect(screen.getByText('Biblioteca')).toBeInTheDocument();
       expect(screen.getByText('TTS Studio')).toBeInTheDocument();
@@ -92,7 +91,6 @@ describe('DashboardLayout', () => {
       );
 
       expect(screen.getByText('Novo Vídeo')).toBeInTheDocument();
-      expect(screen.getByText('Importar')).toBeInTheDocument();
       expect(screen.getByText('Script IA')).toBeInTheDocument();
     });
 
@@ -124,9 +122,6 @@ describe('DashboardLayout', () => {
       fireEvent.click(screen.getByText('Video Studio'));
       expect(mockNavigate).toHaveBeenCalledWith('/studio');
 
-      // Click on Import Video menu item  
-      fireEvent.click(screen.getByText('Import Video'));
-      expect(mockNavigate).toHaveBeenCalledWith('/import');
 
       // Click on IA Scripts menu item
       fireEvent.click(screen.getByText('IA Scripts'));
@@ -146,9 +141,6 @@ describe('DashboardLayout', () => {
       fireEvent.click(screen.getByText('Novo Vídeo'));
       expect(mockNavigate).toHaveBeenCalledWith('/studio');
 
-      // Click on "Importar" chip
-      fireEvent.click(screen.getByText('Importar'));
-      expect(mockNavigate).toHaveBeenCalledWith('/import');
 
       // Click on "Script IA" chip
       fireEvent.click(screen.getByText('Script IA'));
@@ -255,7 +247,7 @@ describe('DashboardLayout', () => {
       // Note: We look for badge elements since the "NEW" text might be in a badge component
       const badges = screen.getAllByText('NEW');
       
-      // Should have badges for Video Studio, Import Video, IA Scripts, and API Docs
+      // Should have badges for Video Studio, IA Scripts, and API Docs
       expect(badges.length).toBeGreaterThan(0);
     });
   });

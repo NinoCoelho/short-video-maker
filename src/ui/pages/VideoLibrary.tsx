@@ -55,7 +55,7 @@ const VideoLibrary: React.FC = () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/videos');
-      setVideos(response.data);
+      setVideos(response.data.data || response.data);
     } catch (error) {
       console.error('Error fetching videos:', error);
     } finally {

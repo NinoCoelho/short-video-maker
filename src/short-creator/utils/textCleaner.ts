@@ -1,4 +1,4 @@
-import { logger } from "../../utils/logger";
+import { logger } from "../../logger";
 
 // Regex para identificar emojis
 const emojiRegex = /[\p{Emoji}\u200d\uFE0F]/gu;

@@ -1,298 +1,402 @@
-# 🎬 Short Video Maker v2.0
+# 🎬 Short Video Maker
 
-> **Criador profissional de vídeos curtos com IA** - Uma plataforma completa para criar vídeos para TikTok, Instagram Reels e YouTube Shorts
+> **AI-Powered Professional Short Video Creation Platform** - A comprehensive solution for creating videos for TikTok, Instagram Reels, and YouTube Shorts
 
-![Short Video Maker](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)
 ![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![TypeScript](https://img.shields.io/badge/typescript-5.8+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-## ✨ Novidades da Versão 2.0
+## ✨ Key Features
 
-### 🎨 **Interface Completamente Renovada**
-- **Design moderno** com tema escuro e gradientes
-- **Dashboard intuitivo** com estatísticas em tempo real
-- **Sidebar navegação** com acesso rápido a todas as funcionalidades
-- **Componentes modernos** com Material-UI e animações fluidas
+### 🎬 **Core Video Creation**
+- **AI Script Generation** - Automated script creation with OpenAI & Google Generative AI
+- **Multi-Provider TTS** - ElevenLabs and local TTS support
+- **Background Videos** - Integration with Pixabay, Pexels, and Unsplash
+- **Remotion Rendering** - React-based programmatic video creation
+- **Real-time Updates** - WebSocket-based progress tracking
 
-### 🤖 **IA para Geração de Scripts**
-- **Gerador automático** de roteiros com prompts personalizáveis
-- **Biblioteca de prompts** pré-definidos para diferentes nichos
-- **Sistema de salvamento** de prompts personalizados
-- **Integração perfeita** com o Video Studio
+### 📥 **Video Import & Processing**
+- **Multi-Platform Import** - YouTube, TikTok, Instagram, Facebook support
+- **Automatic Transcription** - Video-to-text conversion
+- **AI Highlight Detection** - Smart scene extraction
+- **Video Segmentation** - Automatic clip creation
+- **Translation Pipeline** - Multi-language support
 
-### 🔧 **Funcionalidades Avançadas**
-- **Busca e substituição** inteligente de vídeos de fundo
-- **Regeneração de áudio** para cenas específicas
-- **Sistema de cache** otimizado para vídeos
-- **Processamento em background** com filas inteligentes
+### 🌐 **Translation System**
+- **Multiple Providers** - Google Cloud, DeepL, OpenAI, Ollama
+- **Context-Aware Translation** - Style and cultural adaptation
+- **Caching System** - Reduced API costs
+- **Batch Processing** - Efficient bulk translations
 
-### 📚 **Documentação Completa**
-- **API Reference** integrada na interface
-- **Servidor MCP** expandido com 7+ tools
-- **Guias de uso** detalhados
-- **Exemplos práticos** de implementação
+### 🔒 **Security & Performance**
+- **Path Traversal Protection** - Secure file operations
+- **SSRF Protection** - Domain allowlisting
+- **Rate Limiting** - Configurable API limits
+- **Performance Monitoring** - Real-time system analysis
+- **Memory Leak Detection** - Automatic prevention
+- **Resource Optimization** - CPU, Memory, IO tracking
 
-## 🚀 Funcionalidades Principais
+## 🏗️ Architecture
 
-### 📺 **Video Studio**
-- **Criação guiada** em 3 etapas: Roteiro → Configurações → Revisão
-- **Editor visual** de cenas com preview em tempo real
-- **Configurações avançadas** de voz, música e legendas
-- **Sistema de templates** para reutilização
+### **Event-Driven Design**
+- Central EventBus for service communication
+- WebSocket server for real-time updates
+- Priority-based queue system with retry logic
+- Memory-efficient weak references
 
-### 🎙️ **TTS Studio Avançado**
-- **Múltiplas vozes** disponíveis (masculinas e femininas)
-- **Suporte a idiomas** (Português e Inglês)
-- **Áudio de referência** para clonagem de voz
-- **Biblioteca de áudios** gerados com reprodução integrada
+### **Microservices Architecture**
+```
+├── Video Creation Service    # Core video generation
+├── Import Pipeline Service   # Multi-platform video import
+├── Translation Service       # Multi-provider translation
+├── Download Service         # Platform-specific downloaders
+├── Queue Service           # Priority-based processing
+├── Performance Monitor     # Real-time system analysis
+└── Security Middleware     # Input validation & protection
+```
 
-### 📊 **Dashboard Inteligente**
-- **Estatísticas em tempo real** de todos os vídeos
-- **Progresso de renderização** com indicadores visuais
-- **Ações rápidas** para criação e gerenciamento
-- **Vídeos recentes** com acesso direto
+### **Database Schema**
+- PostgreSQL with migrations
+- Tables: videos, imports, transcriptions, translations, segments
+- JSONB for flexible metadata
+- Optimized indexing for performance
 
-### 🎬 **Biblioteca de Vídeos**
-- **Visualização em grid** com filtros avançados
-- **Busca inteligente** por conteúdo e status
-- **Ações em massa** para gerenciamento
-- **Preview integrado** dos vídeos
+### **Technology Stack**
+- **Frontend**: React 18 + Material-UI + TypeScript + Vite
+- **Backend**: Express.js + TypeScript + Socket.io
+- **Video**: Remotion + FFmpeg
+- **Database**: PostgreSQL with migrations
+- **AI**: OpenAI, Google Generative AI, Ollama
+- **Testing**: Vitest + Playwright
 
-## 🛠️ Instalação e Configuração
+## 🚀 Quick Start
 
-### Pré-requisitos
+### Prerequisites
 - **Node.js** 18+ 
-- **FFmpeg** instalado no sistema
-- **Python** 3.8+ (para TTS local)
+- **FFmpeg** installed
+- **Python** 3.8+ (for local TTS)
+- **PostgreSQL** (optional, for import features)
 
-### Instalação Rápida
+### Installation
 
 ```bash
-# Clone o repositório
-git clone https://github.com/seu-usuario/short-video-maker.git
+# Clone repository
+git clone https://github.com/gyoridavid/short-video-maker.git
 cd short-video-maker
 
-# Instale as dependências
+# Install dependencies
 npm install
 
-# Configure as dependências Python para TTS
+# Setup Python TTS (optional)
 pip install -r requirements.txt
 
-# Inicie o servidor de desenvolvimento
+# Start development server
 npm run dev
 ```
 
-### Configuração Avançada
+### Environment Setup
 
 ```bash
-# Build completo para produção
-npm run build
+# Copy example environment file
+cp .env.example .env
 
-# Iniciar em produção
-npm start
-
-# Executar apenas o servidor
-npm run dev:server
-
-# Executar apenas a interface
-npm run dev:ui
+# Configure required API keys:
+# - OPENAI_API_KEY
+# - GOOGLE_GENERATIVE_AI_API_KEY
+# - GOOGLE_TRANSLATE_API_KEY (optional)
+# - DEEPL_API_KEY (optional)
+# - DATABASE_URL (optional)
 ```
 
-## 🎯 Como Usar
+## 📖 Usage
 
-### 1. **Criação com IA**
-1. Acesse **IA Scripts** no menu lateral
-2. Digite um tópico (ex: "marketing digital")
-3. Escolha um prompt pré-definido ou crie um personalizado
-4. Clique em **"Gerar Script"**
-5. Use o script gerado no Video Studio
+### Creating Videos
+```bash
+# Using the UI
+1. Open http://localhost:3232
+2. Navigate to Video Studio
+3. Add scenes with text and keywords
+4. Configure voice, orientation, and music
+5. Click "Create Video"
 
-### 2. **Video Studio**
-1. Vá para **Video Studio**
-2. **Etapa 1**: Adicione cenas com texto e palavras-chave
-3. **Etapa 2**: Configure voz, orientação e música
-4. **Etapa 3**: Revise e clique em **"Criar Vídeo"**
+# Using the API
+curl -X POST http://localhost:3233/api/render \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenes": [{
+      "text": "Welcome to our channel",
+      "searchTerms": ["welcome", "intro"]
+    }],
+    "config": {
+      "voice": "Paulo",
+      "orientation": "portrait"
+    }
+  }'
+```
 
-### 3. **Gerenciamento**
-- **Dashboard**: Monitore todos os vídeos
-- **Biblioteca**: Organize e busque vídeos
-- **TTS Studio**: Gere áudios personalizados
-- **Configurações**: Personalize padrões
+### Importing Videos
+```bash
+# Analyze video URL
+curl -X POST http://localhost:3233/api/import/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://youtube.com/watch?v=..."}'  
+
+# Start import job
+curl -X POST http://localhost:3233/api/import/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://youtube.com/watch?v=...",
+    "options": {
+      "transcribe": true,
+      "detectHighlights": true,
+      "translate": true,
+      "targetLanguage": "pt"
+    }
+  }'
+```
 
 ## 🔌 API Reference
 
-### Principais Endpoints
+### Core Endpoints
 
-#### **Criação de Vídeos**
-```http
-POST /api/render
-Content-Type: application/json
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/render` | POST | Create new video |
+| `/api/status/:id` | GET | Get video status |
+| `/api/generate-tts` | POST | Generate TTS audio |
+| `/api/search-background-videos` | POST | Search video providers |
+| `/api/replace-scene-video` | POST | Replace scene background |
+| `/api/regenerate-scene-audio` | POST | Regenerate scene audio |
 
+### Import Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/import/analyze` | POST | Analyze video URL |
+| `/api/import/start` | POST | Start import job |
+| `/api/import/job/:jobId` | GET | Get job status |
+| `/api/import/queue/status` | GET | Queue status |
+
+### Translation Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/translate` | POST | Translate text |
+| `/api/translate/batch` | POST | Batch translation |
+
+### WebSocket Events
+
+```javascript
+// Connect to WebSocket
+const socket = io('http://localhost:3233');
+
+// Listen for events
+socket.on('video-status', (data) => {
+  console.log('Progress:', data.progress);
+});
+
+socket.on('download-progress', (data) => {
+  console.log('Download:', data.percentage + '%');
+});
+```
+
+## 🤖 Model Context Protocol (MCP)
+
+### Available Tools
+
+```typescript
+// MCP Server endpoint
+const MCP_ENDPOINT = 'http://localhost:3233/mcp/sse';
+
+// Available tools:
+- create-short-video    // Create videos with AI scripts
+- get-video-status     // Check rendering progress
+- list-videos         // List all videos
+- delete-video       // Remove videos
+- search-videos     // Search background videos
+- generate-tts     // Generate TTS audio
+- get-system-info // System information
+```
+
+### MCP Integration Example
+
+```bash
+# Add to Claude Desktop config
 {
-  "scenes": [
-    {
-      "text": "Texto da cena",
-      "searchTerms": ["palavra1", "palavra2"]
+  "mcpServers": {
+    "short-video-maker": {
+      "command": "npx",
+      "args": ["short-video-maker"]
     }
-  ],
-  "config": {
-    "voice": "Paulo",
-    "orientation": "portrait",
-    "language": "pt"
   }
 }
 ```
 
-#### **Status do Vídeo**
-```http
-GET /api/status/:videoId
+## ⚙️ Configuration
+
+### Environment Variables
+
+```env
+# Server Configuration
+PORT=3233
+NODE_ENV=production
+REMOTION_HOST=0.0.0.0
+
+# AI Providers
+OPENAI_API_KEY=your_key
+GOOGLE_GENERATIVE_AI_API_KEY=your_key
+
+# Translation Services (optional)
+GOOGLE_TRANSLATE_API_KEY=your_key
+DEEPL_API_KEY=your_key
+
+# Database (optional)
+DATABASE_URL=postgresql://user:pass@localhost/dbname
+
+# Performance Monitoring
+PERFORMANCE_MONITORING_ENABLED=true
+PERFORMANCE_MONITORING_INTERVAL=5000
+
+# Security
+SECURITY_RATE_LIMIT_WINDOW=60000
+SECURITY_RATE_LIMIT_MAX=100
 ```
 
-#### **Geração de TTS**
-```http
-POST /api/generate-tts
-Content-Type: application/json
+## 🔧 Advanced Features
 
-{
-  "text": "Texto para converter",
-  "voice": "Paulo",
-  "language": "pt"
-}
+### Performance Monitoring
+
+```bash
+# Start monitoring
+npm run performance:start
+
+# Generate report
+npm run performance:report
+
+# Check health
+npm run performance:health
 ```
 
-#### **Busca de Vídeos**
-```http
-POST /api/search-background-videos
-Content-Type: application/json
+Monitored metrics:
+- CPU usage and bottlenecks
+- Memory usage and leak detection
+- Disk I/O operations
+- Network latency and throughput
+- Cache hit rates
+- Database query performance
 
-{
-  "query": "natureza",
-  "count": 5,
-  "orientation": "portrait"
-}
+### Security Features
+
+- **Path Traversal Protection**: Validates all file paths
+- **SSRF Protection**: Domain allowlisting for external requests
+- **Rate Limiting**: Configurable per-endpoint limits
+- **Input Validation**: Joi schemas for all endpoints
+- **File Upload Security**: MIME validation and size limits
+
+## 🧪 Testing
+
+### Test Suites
+
+```bash
+# Unit tests
+npm test
+
+# E2E tests
+npm run test:e2e
+
+# Performance tests
+npm run test:performance
+
+# Specific test suites
+npm run test:e2e:websocket  # WebSocket tests
+npm run test:e2e:batch      # Batch import tests
+npm run test:e2e:ui         # UI tests
 ```
 
-### Novos Endpoints v2.0
+### Test Coverage
 
-- `POST /api/replace-scene-video` - Substituir vídeo de uma cena
-- `POST /api/regenerate-scene-audio` - Regenerar áudio de cena
-- `GET /api/voices` - Listar vozes disponíveis
-- `GET /api/music-tags` - Listar tags de música
-- `GET /api/dashboard/stats` - Estatísticas do dashboard
+- **Unit Tests**: Core services, utilities
+- **Integration Tests**: API endpoints, database
+- **E2E Tests**: Full user workflows
+- **Performance Tests**: Memory, CPU, throughput
 
-## 🤖 Model Context Protocol (MCP)
+## 🐳 Docker Deployment
 
-### Servidor MCP Expandido
+### Available Images
 
-O servidor MCP v2.0 inclui 7 tools principais:
-
-- **`create-short-video`** - Criar vídeos
-- **`get-video-status`** - Verificar status
-- **`list-videos`** - Listar todos os vídeos
-- **`delete-video`** - Deletar vídeos
-- **`search-videos`** - Buscar vídeos de fundo
-- **`generate-tts`** - Gerar áudio TTS
-- **`get-system-info`** - Informações do sistema
-
-### Conexão MCP
-```
-Endpoint SSE: http://localhost:3233/mcp/sse
-Health Check: http://localhost:3233/mcp/health
-```
-
-## 🎨 Personalização
-
-### Temas e Estilos
-- **Modo escuro** por padrão com opção de claro
-- **Cores personalizáveis** via tema do Material-UI
-- **Gradientes modernos** em toda a interface
-- **Animações fluidas** com transitions CSS
-
-### Configurações
-- **Vozes padrão** configuráveis
-- **Orientação preferida** (retrato/paisagem)
-- **Qualidade de vídeo** ajustável
-- **Salvamento automático** opcional
-
-## 📈 Monitoramento e Analytics
-
-### Dashboard Analytics
-- **Total de vídeos** criados
-- **Status em tempo real** (processando, concluídos, falharam)
-- **Vídeos de hoje** 
-- **Progresso de renderização** com indicadores visuais
-
-### Sistema de Cache
-- **Cache inteligente** de vídeos de fundo
-- **Limpeza automática** de arquivos antigos
-- **Estatísticas de uso** do cache
-- **Otimização de performance**
-
-## 🔧 Desenvolvimento
-
-### Estrutura do Projeto
-```
-src/
-├── ui/                    # Interface React
-│   ├── components/        # Componentes reutilizáveis
-│   ├── pages/            # Páginas principais
-│   └── styles/           # Estilos globais
-├── server/               # Backend Express
-│   ├── routers/          # Rotas da API
-│   └── routes/           # Endpoints específicos
-├── short-creator/        # Core do processamento
-│   ├── libraries/        # Integrações (FFmpeg, TTS, etc)
-│   └── utils/           # Utilitários
-└── types/               # Definições TypeScript
-```
-
-### Scripts Disponíveis
-- `npm run dev` - Desenvolvimento completo
-- `npm run build` - Build de produção
-- `npm test` - Executar testes
-- `npm run ui:dev` - Apenas interface
-- `npm run dev:server` - Apenas backend
-
-## 🚦 Configurações de Produção
-
-### Docker
-```dockerfile
-# Use a imagem oficial
+```bash
+# Standard image
 docker pull gyoridavid/short-video-maker:latest
 
-# Execute o container
-docker run -p 3000:3000 gyoridavid/short-video-maker:latest
+# GPU-accelerated (CUDA)
+docker pull gyoridavid/short-video-maker:latest-cuda
+
+# Minimal size
+docker pull gyoridavid/short-video-maker:latest-tiny
 ```
 
-### Variáveis de Ambiente
-```env
-PORT=3000
-REMOTION_HOST=0.0.0.0
-NODE_ENV=production
+### Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  app:
+    image: gyoridavid/short-video-maker:latest
+    ports:
+      - "3233:3233"
+      - "3232:3232"
+    environment:
+      - NODE_ENV=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
 ```
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-1. **Fork** o projeto
-2. **Crie** uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
-3. **Commit** suas mudanças (`git commit -am 'Adiciona nova funcionalidade'`)
-4. **Push** para a branch (`git push origin feature/nova-funcionalidade`)
-5. **Abra** um Pull Request
+### Development Workflow
 
-## 📄 Licença
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Run tests (`npm test`)
+4. Commit changes (`git commit -m 'Add amazing feature'`)
+5. Push branch (`git push origin feature/amazing-feature`)
+6. Open Pull Request
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+### Code Standards
 
-## 🙏 Agradecimentos
+- TypeScript with strict mode
+- ESLint + Prettier formatting
+- Comprehensive test coverage
+- JSDoc for public APIs
 
-- **Remotion** - Framework de vídeo programático
-- **Material-UI** - Componentes React modernos
-- **FFmpeg** - Processamento de vídeo
-- **Model Context Protocol** - Integração com IA
+## 📚 Documentation
+
+- [API Documentation](docs/api/README.md)
+- [Developer Guide](docs/developer/README.md)
+- [User Guide](docs/user-guide/README.md)
+- [Platform Guides](docs/user-guide/platforms/README.md)
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/gyoridavid/short-video-maker/issues)
+- **Documentation**: [Full Docs](docs/)
+- **Examples**: [Example Code](examples/)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Remotion** - Programmatic video framework
+- **Material-UI** - React component library
+- **FFmpeg** - Video processing
+- **Model Context Protocol** - AI integration
 
 ---
 
-**Desenvolvido com ❤️ para criadores de conteúdo**
+**Built with ❤️ for content creators**
 
-[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/seu-usuario/short-video-maker)
-[![Discord](https://img.shields.io/badge/Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/seu-servidor) 
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/gyoridavid/short-video-maker) 
