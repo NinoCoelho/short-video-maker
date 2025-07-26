@@ -105,8 +105,8 @@ export class LocalTTS {
         const durationPerWord = wordCount > 0 ? (chunkDuration * 1000) / wordCount : 0;
 
         const chunkSubtitles = words.map((word, index) => {
-          const start = totalDuration * 1000 + (index * durationPerWord);
-          const end = start + durationPerWord;
+          const start = totalDuration + (index * durationPerWord) / 1000; // Convert to seconds
+          const end = start + durationPerWord / 1000; // Convert to seconds
           return { text: word, start, end };
         });
 

@@ -19,7 +19,8 @@ import {
   CreateSessionRequest,
   SendChatMessageRequest,
   ExtractContentRequest,
-  ChatMessage
+  ChatMessage,
+  GeneratedScript
 } from '../../types/iaScript';
 import { SceneInput } from '../../types/shorts';
 
@@ -261,14 +262,18 @@ export function createIAScriptRouter(
         // Update session with generated script
         await iaScriptService.updateSessionScript(sessionId, script);
 
-        // Create assistant message
+        // Create assistant message with simple confirmation and review button
         const assistantMessage: ChatMessage = {
           id: cuid(),
           role: 'assistant',
-          content: `Generated script with ${script.metadata.totalScenes} scenes (estimated duration: ${script.metadata.estimatedDuration}s)`,
+          content: `✅ **Script "${script.title}" gerado com sucesso!**\n\n` +
+                  `📊 **${script.metadata.totalScenes} cenas** • **~${script.metadata.estimatedDuration}s** • **${script.metadata.aiProvider}**\n\n` +
+                  `💡 Use o botão abaixo para revisar e analisar o script completo.`,
           timestamp: new Date(),
           metadata: {
-            generationTime: Date.now() - userMessage.timestamp.getTime()
+            generationTime: Date.now() - userMessage.timestamp.getTime(),
+            hasScript: true,
+            scriptData: script
           }
         };
         await iaScriptService.addChatMessage(sessionId, assistantMessage);
@@ -277,9 +282,27 @@ export function createIAScriptRouter(
           script,
           message: assistantMessage
         });
-      } catch (error) {
+      } catch (error: any) {
         await iaScriptService.updateSessionStatus(sessionId, 'draft');
-        throw new ProcessingError('Script generation failed', sessionId, 'generation');
+        
+        // Provide more specific error messages
+        let userFriendlyMessage = 'Não foi possível gerar o script.';
+        
+        if (error.message?.includes('API key')) {
+          userFriendlyMessage = 'Erro de configuração: API key não encontrada ou inválida.';
+        } else if (error.message?.includes('rate limit')) {
+          userFriendlyMessage = 'Limite de requisições excedido. Por favor, aguarde alguns segundos e tente novamente.';
+        } else if (error.message?.includes('timeout')) {
+          userFriendlyMessage = 'A geração do script demorou muito. Por favor, tente novamente com um prompt mais simples.';
+        } else if (error.message?.includes('network')) {
+          userFriendlyMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+        } else if (error.message?.includes('Ollama')) {
+          userFriendlyMessage = 'Serviço de IA local não está disponível. Verifique se o Ollama está rodando.';
+        }
+        
+        logger.error('Script generation failed:', error);
+        
+        throw new ProcessingError(userFriendlyMessage, sessionId, 'generation');
       }
     })
   );
@@ -288,7 +311,7 @@ export function createIAScriptRouter(
     strictRateLimiter,
     asyncHandler(async (req: Request, res: Response) => {
       const sessionId = req.params.id;
-      const { immediate } = req.body;
+      const { immediate, config: uiConfig } = req.body;
 
       const session = await iaScriptService.getSession(sessionId);
       if (!session) {
@@ -305,8 +328,34 @@ export function createIAScriptRouter(
         searchTerms: scene.searchKeywords || []
       }));
 
+      // Use UI config if provided, otherwise fall back to session config
+      const baseConfig = uiConfig || session.config;
+      
+      // Ensure config has proper format for video rendering
+      const renderConfig = {
+        ...baseConfig,
+        // Map IA Script config properties to video rendering format
+        captionsEnabled: true, // Always enable captions for IA Script videos
+        captionPosition: baseConfig.captionPosition || 'bottom',
+        captionBackgroundColor: baseConfig.captionBackgroundColor || '#000000',
+        captionTextColor: baseConfig.captionTextColor || '#ffffff',
+        // Ensure hook is properly set for captions display
+        hook: baseConfig.hook || session.currentScript.title,
+        // Enable overlays if configured
+        overlay: baseConfig.overlay,
+        // Pass through all other config
+        voice: baseConfig.voice,
+        orientation: baseConfig.orientation,
+        language: baseConfig.language,
+        music: baseConfig.music,
+        musicVolume: baseConfig.musicVolume,
+        paddingBack: baseConfig.paddingBack || 3000
+      };
+
+      logger.info({ sessionId, renderConfig }, 'Creating video with IA Script config');
+
       // Create video using ShortCreator
-      const videoId = await shortCreator.addToQueue(scenes, session.config);
+      const videoId = await shortCreator.addToQueue(scenes, renderConfig);
 
       // Update session with video ID
       await pool.query(
@@ -405,6 +454,41 @@ export function createIAScriptRouter(
       ResponseFormatter.success(res, result);
     })
   );
+
+  // Helper function to generate script summary
+  function generateScriptSummary(script: GeneratedScript): string {
+    const { title, description, scenes, metadata } = script;
+    
+    let summary = `✅ **Script gerado com sucesso!**\n\n`;
+    
+    // Basic info
+    summary += `📝 **${title || 'Script'}**\n`;
+    if (description) {
+      summary += `📋 ${description}\n\n`;
+    }
+    
+    // Metadata
+    summary += `📊 **Informações:**\n`;
+    summary += `• ${metadata.totalScenes} cenas\n`;
+    summary += `• ~${metadata.estimatedDuration}s de duração\n`;
+    summary += `• Gerado com ${metadata.aiProvider}\n\n`;
+    
+    // Scene breakdown
+    summary += `🎬 **Resumo das Cenas:**\n`;
+    scenes.forEach((scene, index) => {
+      const sceneNum = scene.sceneNumber || index + 1;
+      const duration = scene.duration || '5s';
+      const text = scene.text.length > 60 ? scene.text.substring(0, 57) + '...' : scene.text;
+      summary += `${sceneNum}. (${duration}) ${text}\n`;
+    });
+    
+    summary += `\n💡 **Próximos passos:**\n`;
+    summary += `• Revise o script e faça ajustes se necessário\n`;
+    summary += `• Clique em "Renderizar" para criar o vídeo\n`;
+    summary += `• Ou continue a conversa para fazer modificações`;
+    
+    return summary;
+  }
 
   return router;
 }

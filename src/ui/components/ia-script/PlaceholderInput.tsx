@@ -42,6 +42,7 @@ interface PlaceholderInputProps {
   files: UploadedFile[];
   onSend: () => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 const PlaceholderInput: React.FC<PlaceholderInputProps> = ({
@@ -54,6 +55,7 @@ const PlaceholderInput: React.FC<PlaceholderInputProps> = ({
   files,
   onSend,
   disabled,
+  placeholder,
 }) => {
   const textFieldRef = useRef<HTMLInputElement>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -188,7 +190,7 @@ const PlaceholderInput: React.FC<PlaceholderInputProps> = ({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Digite seu prompt aqui... Use {{nome}} para criar placeholders"
+          placeholder={placeholder || "Digite seu prompt aqui... Use {{nome}} para criar placeholders"}
           disabled={disabled}
           sx={{
             '& .MuiOutlinedInput-root': {

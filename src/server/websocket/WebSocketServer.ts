@@ -47,17 +47,18 @@ export class WebSocketServer {
       logger.info(`Client connected: ${socket.id}`);
 
       // Handle video subscription
-      socket.on('subscribe-video', (videoId: string) => {
+      socket.on('subscribe:video', (videoId: string) => {
         if (!this.videoSubscribers.has(videoId)) {
           this.videoSubscribers.set(videoId, new Set());
         }
         this.videoSubscribers.get(videoId)!.add(socket.id);
         socket.join(`video-${videoId}`);
+        socket.emit('subscribed:video', { videoId });
         logger.debug(`Client ${socket.id} subscribed to video ${videoId}`);
       });
 
       // Handle video unsubscription
-      socket.on('unsubscribe-video', (videoId: string) => {
+      socket.on('unsubscribe:video', (videoId: string) => {
         const subscribers = this.videoSubscribers.get(videoId);
         if (subscribers) {
           subscribers.delete(socket.id);
@@ -67,6 +68,19 @@ export class WebSocketServer {
         }
         socket.leave(`video-${videoId}`);
         logger.debug(`Client ${socket.id} unsubscribed from video ${videoId}`);
+      });
+
+      // Handle subscribe to all videos
+      socket.on('subscribe:all', () => {
+        socket.join('all-videos');
+        socket.emit('subscribed:all');
+        logger.debug(`Client ${socket.id} subscribed to all videos`);
+      });
+
+      // Handle unsubscribe from all videos
+      socket.on('unsubscribe:all', () => {
+        socket.leave('all-videos');
+        logger.debug(`Client ${socket.id} unsubscribed from all videos`);
       });
 
       // Handle import job subscription
@@ -116,19 +130,32 @@ export class WebSocketServer {
 
   private setupEventListeners() {
     // Listen for video status updates
-    eventBus.on('video-status-updated', ({ videoId, status, progress, message }) => {
-      this.broadcastToVideoSubscribers(videoId, 'video-status', {
+    eventBus.on('video-status-updated', ({ videoId, status, progress, message, stage }) => {
+      this.broadcastToVideoSubscribers(videoId, 'video:status:update', {
         videoId,
         status,
         progress,
         message,
+        stage,
         timestamp: new Date().toISOString()
       });
+      
+      // Also emit processing progress event for compatibility
+      if (status === 'processing') {
+        this.broadcastToVideoSubscribers(videoId, 'video:processing:progress', {
+          videoId,
+          status,
+          progress,
+          message,
+          stage,
+          timestamp: new Date().toISOString()
+        });
+      }
     });
 
     // Listen for video completed events
     eventBus.on('video-completed', ({ videoId, outputPath }) => {
-      this.broadcastToVideoSubscribers(videoId, 'video-complete', {
+      this.broadcastToVideoSubscribers(videoId, 'video:completed', {
         videoId,
         outputPath,
         timestamp: new Date().toISOString()
@@ -137,7 +164,7 @@ export class WebSocketServer {
 
     // Listen for video error events
     eventBus.on('video-error', ({ videoId, error }) => {
-      this.broadcastToVideoSubscribers(videoId, 'video-error', {
+      this.broadcastToVideoSubscribers(videoId, 'video:error', {
         videoId,
         error: error.message || error,
         timestamp: new Date().toISOString()
@@ -188,6 +215,18 @@ export class WebSocketServer {
     eventBus.on('video:render:start', (data) => {
       this.broadcastToVideoSubscribers(data.videoId, 'video-render-start', {
         ...data,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // Listen for scene processing events
+    eventBus.on('scene-processing', ({ videoId, sceneIndex, totalScenes, stage, progress }) => {
+      this.broadcastToVideoSubscribers(videoId, 'scene:processing', {
+        videoId,
+        sceneIndex,
+        totalScenes,
+        stage,
+        progress,
         timestamp: new Date().toISOString()
       });
     });

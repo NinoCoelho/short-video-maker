@@ -94,15 +94,15 @@ export const PortraitVideo: FC<Props> = ({
   };
 
   const captionPosition = config.captionPosition ?? "center";
-  let captionStyle = {};
+  let captionStyle: React.CSSProperties = { position: "absolute" };
   if (captionPosition === "top") {
-    captionStyle = { top: 100 };
+    captionStyle = { ...captionStyle, top: 100 };
   }
   if (captionPosition === "center") {
-    captionStyle = { top: "50%", transform: "translateY(-50%)" };
+    captionStyle = { ...captionStyle, top: "50%", transform: "translateY(-50%)" };
   }
   if (captionPosition === "bottom") {
-    captionStyle = { bottom: 100 };
+    captionStyle = { ...captionStyle, bottom: 100 };
   }
 
   const [musicVolume, musicMuted] = calculateVolume(config.musicVolume);
@@ -266,7 +266,7 @@ export const PortraitVideo: FC<Props> = ({
         muted={musicMuted}
       />
 
-      {config?.hook && frame === 0 && (
+      {config?.hook && frame < fps * 2 && (
         <div
           style={{
             position: "absolute",
@@ -359,7 +359,7 @@ export const PortraitVideo: FC<Props> = ({
       {scenes.map((scene, i) => {
         const { captions, audio, videos } = scene;
         const pages = createCaptionPages({
-          captions,
+          captions: captions || [],
           lineMaxLength: 20,
           lineCount: 1,
           maxDistanceMs: 1000,
@@ -527,9 +527,14 @@ export const PortraitVideo: FC<Props> = ({
                     style={{
                       position: "absolute",
                       left: 0,
+                      right: 0,
                       width: "100%",
                       ...captionStyle,
                       zIndex: 1001,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
                     {page.lines.map((line, k) => {
@@ -546,6 +551,8 @@ export const PortraitVideo: FC<Props> = ({
                             textAlign: "center",
                             width: "100%",
                             textTransform: "uppercase",
+                            margin: 0,
+                            padding: "10px",
                           }}
                           key={`scene-${i}-page-${j}-line-${k}`}
                         >

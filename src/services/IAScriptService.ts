@@ -30,13 +30,13 @@ export class IAScriptService {
     
     // Initialize AI APIs
     logger.info('Initializing IA Script Service with API keys:', {
-      hasGeminiKey: !!process.env.GEMINI_API_KEY,
+      hasGoogleKey: !!process.env.GOOGLE_API_KEY,
       hasOpenAIKey: !!process.env.OPENAI_API_KEY
     });
     
-    if (process.env.GEMINI_API_KEY) {
-      this.geminiApi = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      logger.info('Gemini API initialized');
+    if (process.env.GOOGLE_API_KEY) {
+      this.geminiApi = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+      logger.info('Gemini API initialized with Google API key');
     }
     if (process.env.OPENAI_API_KEY) {
       this.openaiApi = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -459,7 +459,7 @@ export class IAScriptService {
           hasGeminiApi: !!this.geminiApi,
           hasOpenAIApi: !!this.openaiApi
         });
-        throw new Error('No AI provider available');
+        throw new Error('Nenhum serviço de IA configurado. Verifique se as API keys estão definidas nas variáveis de ambiente (GOOGLE_API_KEY ou OPENAI_API_KEY).');
       }
     } catch (error) {
       logger.error('Script generation failed:', {

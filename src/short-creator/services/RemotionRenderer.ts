@@ -144,7 +144,16 @@ export class RemotionRenderer {
   public preprocessVideoDataForRemotionRendering(videoData: any): any {
     const processedData = JSON.parse(JSON.stringify(videoData)); // Deep clone
     
-    logger.debug({ videoId: 'preprocessing' }, "Starting video data preprocessing for Remotion");
+    logger.info({ 
+      videoId: 'preprocessing',
+      hasConfig: !!processedData.config,
+      configKeys: processedData.config ? Object.keys(processedData.config) : [],
+      configOverlay: processedData.config?.overlay,
+      configHook: processedData.config?.hook,
+      captionsEnabled: processedData.config?.captionsEnabled,
+      scenesCount: processedData.scenes?.length || 0,
+      firstSceneCaptions: processedData.scenes?.[0]?.captions?.length || 0
+    }, "Starting video data preprocessing for Remotion with config details");
     
     // Process audio URLs in scenes
     if (processedData.scenes) {

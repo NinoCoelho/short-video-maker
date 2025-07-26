@@ -285,6 +285,18 @@ export class SceneManager {
       ...config,
       durationMs: totalDuration * 1000,
       port: this.globalConfig.port,
+      // Ensure critical rendering properties are preserved
+      hook: config.hook,
+      overlay: config.overlay,
+      captionsEnabled: config.captionsEnabled,
+      captionPosition: config.captionPosition,
+      captionBackgroundColor: config.captionBackgroundColor,
+      captionTextColor: config.captionTextColor,
+      music: config.music,
+      musicVolume: config.musicVolume,
+      voice: config.voice,
+      language: config.language,
+      orientation: config.orientation
     };
 
     logger.debug({ 
@@ -437,8 +449,8 @@ export class SceneManager {
         
         const mappedCaptions = (result.subtitles || []).map(sub => ({
           text: sub.text,
-          startMs: sub.start * 1000,
-          endMs: sub.end * 1000
+          startMs: sub.start * 1000,  // Convert seconds to milliseconds
+          endMs: sub.end * 1000       // Convert seconds to milliseconds
         }));
         
         audioData.push({

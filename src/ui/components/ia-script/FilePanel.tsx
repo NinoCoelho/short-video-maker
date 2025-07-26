@@ -15,6 +15,7 @@ import {
   CircularProgress,
   Chip,
   alpha,
+  LinearProgress,
 } from '@mui/material';
 import {
   InsertDriveFile as FileIcon,
@@ -35,6 +36,7 @@ interface FilePanelProps {
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   uploadingFile: boolean;
   fileInputRef: React.RefObject<HTMLInputElement>;
+  uploadProgress?: number;
 }
 
 const FilePanel: React.FC<FilePanelProps> = ({
@@ -44,6 +46,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
   onFileUpload,
   uploadingFile,
   fileInputRef,
+  uploadProgress = 0,
 }) => {
   const handleToggleFile = (fileId: string) => {
     if (selectedFiles.includes(fileId)) {
@@ -104,8 +107,16 @@ const FilePanel: React.FC<FilePanelProps> = ({
           onClick={() => fileInputRef.current?.click()}
           disabled={uploadingFile}
         >
-          {uploadingFile ? 'Enviando...' : 'Enviar Arquivo'}
+          {uploadingFile ? `Enviando... ${uploadProgress}%` : 'Enviar Arquivo'}
         </Button>
+        
+        {uploadingFile && uploadProgress > 0 && (
+          <LinearProgress 
+            variant="determinate" 
+            value={uploadProgress} 
+            sx={{ mt: 1 }}
+          />
+        )}
 
         {files.length > 0 && (
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

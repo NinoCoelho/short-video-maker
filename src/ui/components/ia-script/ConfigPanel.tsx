@@ -221,6 +221,24 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onChange }) => {
           </Box>
         </Box>
 
+        {/* Hook Text */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextIcon fontSize="small" />
+            Texto de Abertura (Hook)
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={config.hook || ''}
+            onChange={(e) => handleChange('hook', e.target.value)}
+            placeholder="Texto que aparece no início do vídeo"
+            helperText="Deixe vazio para usar o título do script"
+          />
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
         {/* Advanced Settings */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" gutterBottom>

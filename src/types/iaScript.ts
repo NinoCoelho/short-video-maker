@@ -60,6 +60,14 @@ export interface ChatMessageMetadata {
   filesUsed?: string[];
   placeholdersResolved?: Record<string, string>;
   generationTime?: number;
+  isError?: boolean;
+  canRetry?: boolean;
+  originalPrompt?: string;
+  isProgress?: boolean;
+  videoId?: string;
+  isComplete?: boolean;
+  hasScript?: boolean;
+  scriptData?: GeneratedScript;
 }
 
 export interface ChatMessage {

@@ -109,10 +109,15 @@ export class TTSManager {
     // Wait for the moved file to be ready
     await this.waitForFileReady(targetPath);
 
+    // Ensure subtitles are always generated
+    const subtitles = result.subtitles && result.subtitles.length > 0
+      ? result.subtitles
+      : this.generateFallbackSubtitles(text, duration);
+
     return {
       audioPath: targetPath,
       duration,
-      subtitles: result.subtitles || []
+      subtitles
     };
   }
 

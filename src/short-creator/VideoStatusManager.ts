@@ -143,6 +143,23 @@ export class VideoStatusManager {
 
       await this.safeWriteJson(filePath, data);
       logger.info({ videoId, status, progress, stage, message }, "Video status updated.");
+      
+      // Emit WebSocket event for real-time updates
+      eventBus.emit('video-status-updated', {
+        videoId,
+        status,
+        progress,
+        message,
+        stage
+      });
+      
+      // Emit completion event if video is ready
+      if (status === 'ready') {
+        eventBus.emit('video-completed', {
+          videoId,
+          outputPath: message // Assuming outputPath is passed as message
+        });
+      }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Unknown error";
       logger.error({ videoId, status, error: errorMessage }, "Failed to update video status.");
@@ -189,6 +206,15 @@ export class VideoStatusManager {
         stage, 
         estimatedTimeRemaining 
       }, "Video progress updated.");
+      
+      // Emit WebSocket event for real-time progress updates
+      eventBus.emit('video-status-updated', {
+        videoId,
+        status: currentData.status || 'processing',
+        progress,
+        message: currentData.message,
+        stage
+      });
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Unknown error";
       logger.error({ videoId, progress, error: errorMessage }, "Failed to update video progress.");
@@ -225,6 +251,12 @@ export class VideoStatusManager {
 
       await this.safeWriteJson(filePath, data);
       logger.error({ videoId, error }, "Video error status set.");
+      
+      // Emit WebSocket event for error updates
+      eventBus.emit('video-error', {
+        videoId,
+        error
+      });
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Unknown error";
       logger.error({ videoId, error: errorMessage }, "Failed to set video error status.");

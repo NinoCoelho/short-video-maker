@@ -676,6 +676,18 @@ export class ShortCreator {
       const totalDuration = remotionData.scenes.reduce((acc: number, s: Scene) => acc + s.duration, 0);
       remotionData.music = this.findMusic(totalDuration, config.music);
 
+      // Log the config that will be saved
+      logger.info({ 
+        videoId, 
+        configKeys: Object.keys(remotionData.config),
+        hook: remotionData.config.hook,
+        overlay: remotionData.config.overlay,
+        captionsEnabled: remotionData.config.captionsEnabled,
+        captionPosition: remotionData.config.captionPosition,
+        captionBackgroundColor: remotionData.config.captionBackgroundColor,
+        captionTextColor: remotionData.config.captionTextColor
+      }, "Saving video data with config");
+
       // Save video data
       await this.saveVideoData(videoId, remotionData);
       
