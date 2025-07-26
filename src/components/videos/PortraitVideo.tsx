@@ -258,15 +258,17 @@ export const PortraitVideo: FC<Props> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: "white" }}>
-      <Audio
-        loop
-        src={music.url}
-        startFrom={startFrom}
-        volume={(f) => getMusicVolume(f)}
-        muted={musicMuted}
-      />
+      {music && music.url && (
+        <Audio
+          loop
+          src={music.url}
+          startFrom={startFrom}
+          volume={(f) => getMusicVolume(f)}
+          muted={musicMuted}
+        />
+      )}
 
-      {config?.hook && frame < fps * 2 && (
+      {config?.hook && frame === 0 && (
         <div
           style={{
             position: "absolute",

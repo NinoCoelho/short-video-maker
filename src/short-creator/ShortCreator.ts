@@ -169,7 +169,10 @@ export class ShortCreator {
 
       // Find and add music
       const totalDuration = remotionData.scenes.reduce((acc: number, s: Scene) => acc + s.duration, 0);
-      remotionData.music = this.findMusic(totalDuration, config.music);
+      const selectedMusic = this.findMusic(totalDuration, config.music);
+      if (selectedMusic) {
+        remotionData.music = selectedMusic;
+      }
 
       // Save updated data
       await this.saveVideoData(videoId, remotionData);
@@ -472,7 +475,12 @@ export class ShortCreator {
     return Object.values(VoiceEnum);
   }
 
-  private findMusic(duration: number, mood?: MusicTag): MusicForVideo {
+  private findMusic(duration: number, mood?: MusicTag): MusicForVideo | null {
+    // Handle "none" or empty music
+    if (!mood || mood === 'none' || mood === '') {
+      return null;
+    }
+    
     const allMusic = this.musicManager.musicList();
     
     // Filter by mood if provided
@@ -493,6 +501,10 @@ export class ShortCreator {
     // If no music matches the mood, fallback to any music
     if (!bestMusic && mood) {
       bestMusic = allMusic[0];
+    }
+    
+    if (!bestMusic) {
+      return null;
     }
     
     return {
@@ -674,7 +686,10 @@ export class ShortCreator {
 
       // Find and add music
       const totalDuration = remotionData.scenes.reduce((acc: number, s: Scene) => acc + s.duration, 0);
-      remotionData.music = this.findMusic(totalDuration, config.music);
+      const selectedMusic = this.findMusic(totalDuration, config.music);
+      if (selectedMusic) {
+        remotionData.music = selectedMusic;
+      }
 
       // Log the config that will be saved
       logger.info({ 

@@ -337,11 +337,18 @@ const IAScriptStudio: React.FC = () => {
       setGenerationStep('Iniciando renderização do vídeo...');
       setRenderProgress(0);
       
+      // Ensure music is properly set when not 'none'
+      const renderConfig = {
+        ...videoConfig,
+        music: videoConfig.music === 'none' ? '' : videoConfig.music,
+        musicVolume: videoConfig.music === 'none' ? 'muted' : videoConfig.musicVolume,
+      };
+      
       const response = await api.post(
         `/api/ia-script/sessions/${session.id}/render`,
         { 
           immediate: true,
-          config: videoConfig
+          config: renderConfig
         }
       );
 
@@ -383,6 +390,7 @@ const IAScriptStudio: React.FC = () => {
   };
 
   const musicMoods = [
+    { value: 'none', label: 'Sem Música', color: '#9E9E9E' },
     { value: 'happy', label: 'Alegre', color: '#FFC107' },
     { value: 'sad', label: 'Triste', color: '#607D8B' },
     { value: 'excited', label: 'Animado', color: '#FF5722' },
