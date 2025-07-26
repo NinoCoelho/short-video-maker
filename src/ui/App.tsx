@@ -10,7 +10,6 @@ import DashboardLayout from './components/DashboardLayout';
 // Pages
 import Dashboard from './pages/Dashboard';
 import VideoStudio from './pages/VideoStudio';
-import AIScriptGenerator from './pages/AIScriptGenerator';
 import IAScriptStudio from './pages/IAScriptStudio';
 import VideoLibrary from './pages/VideoLibrary';
 import TTSStudio from './pages/TTSStudio';
@@ -119,7 +118,6 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/studio" element={<VideoStudio />} />
-              <Route path="/ai-scripts" element={<AIScriptGenerator />} />
               <Route path="/ia-script-studio" element={<IAScriptStudio />} />
               <Route path="/library" element={<VideoLibrary />} />
               <Route path="/tts" element={<TTSStudio />} />

@@ -352,42 +352,6 @@ const Dashboard: React.FC = () => {
             ))}
           </Grid>
 
-          {/* Quick Actions */}
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
-              Ações Rápidas
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Chip
-                icon={<AddIcon />}
-                label="Criar Vídeo Manual"
-                onClick={() => navigate('/studio')}
-                sx={{
-                  py: 2.5,
-                  px: 1,
-                  fontSize: '0.875rem',
-                  background: alpha(theme.palette.primary.main, 0.1),
-                  '&:hover': {
-                    background: alpha(theme.palette.primary.main, 0.2),
-                  },
-                }}
-              />
-              <Chip
-                icon={<AIIcon />}
-                label="Gerar com IA"
-                onClick={() => navigate('/ai-scripts')}
-                sx={{
-                  py: 2.5,
-                  px: 1,
-                  fontSize: '0.875rem',
-                  background: alpha(theme.palette.secondary.main, 0.1),
-                  '&:hover': {
-                    background: alpha(theme.palette.secondary.main, 0.2),
-                  },
-                }}
-              />
-            </Box>
-          </Box>
 
           {/* Recent Videos */}
           <Box>

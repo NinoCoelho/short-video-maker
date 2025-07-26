@@ -306,7 +306,7 @@ const VideoStudio: React.FC = () => {
   };
 
   const generateAIScript = () => {
-    navigate('/ai-scripts', { state: { returnTo: '/studio' } });
+    navigate('/ia-script-studio');
   };
 
   const renderSceneStep = () => (

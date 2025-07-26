@@ -76,13 +76,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       isNew: true,
     },
     {
-      text: 'IA Scripts',
-      icon: <AIIcon />,
-      path: '/ai-scripts',
-      description: 'Gerador de roteiros com IA',
-      isNew: true,
-    },
-    {
       text: 'IA Script Studio',
       icon: <PsychologyIcon />,
       path: '/ia-script-studio',
@@ -150,51 +143,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         </Typography>
       </Box>
 
-      <Box sx={{ p: 2 }}>
-        {/* Quick Actions */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            mb: 2,
-            background: alpha(theme.palette.primary.main, 0.1),
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-          }}
-        >
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: theme.palette.primary.main }}>
-            Ações Rápidas
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Chip
-              icon={<AddIcon />}
-              label="Novo Vídeo"
-              size="small"
-              onClick={() => navigate('/studio')}
-              sx={{
-                background: theme.palette.primary.main,
-                color: 'white',
-                '&:hover': {
-                  background: theme.palette.primary.dark,
-                },
-              }}
-            />
-            <Chip
-              icon={<AIIcon />}
-              label="Script IA"
-              size="small"
-              onClick={() => navigate('/ai-scripts')}
-              variant="outlined"
-            />
-            <Chip
-              icon={<LibraryIcon />}
-              label="Library"
-              size="small"
-              onClick={() => navigate('/library-manager')}
-              variant="outlined"
-            />
-          </Box>
-        </Paper>
-      </Box>
 
       {/* Navigation Menu */}
       <List sx={{ px: 2 }}>
