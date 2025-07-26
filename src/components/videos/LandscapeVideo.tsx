@@ -200,7 +200,7 @@ export const LandscapeVideo: FC<Props> = ({
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 999,
+            zIndex: 3000, // Increased to be above overlay (2000)
             backgroundColor: "rgba(0,0,0,0.4)",
           }}
         >
