@@ -48,13 +48,15 @@ export class WebSocketServer {
 
       // Handle video subscription
       socket.on('subscribe:video', (videoId: string) => {
+        logger.info(`[WebSocket] Subscribe request - videoId: ${videoId}, socketId: ${socket.id}`);
+        
         if (!this.videoSubscribers.has(videoId)) {
           this.videoSubscribers.set(videoId, new Set());
         }
         this.videoSubscribers.get(videoId)!.add(socket.id);
         socket.join(`video-${videoId}`);
         socket.emit('subscribed:video', { videoId });
-        logger.debug(`Client ${socket.id} subscribed to video ${videoId}`);
+        logger.info(`[WebSocket] Client ${socket.id} subscribed to video ${videoId}`);
       });
 
       // Handle video unsubscription
@@ -131,6 +133,8 @@ export class WebSocketServer {
   private setupEventListeners() {
     // Listen for video status updates
     eventBus.on('video-status-updated', ({ videoId, status, progress, message, stage }) => {
+      logger.info(`[WebSocket] Broadcasting status update - videoId: ${videoId}, status: ${status}, progress: ${progress}`);
+      
       this.broadcastToVideoSubscribers(videoId, 'video:status:update', {
         videoId,
         status,
@@ -303,8 +307,12 @@ export class WebSocketServer {
   }
 
   broadcastToVideoSubscribers(videoId: string, event: string, data: any) {
+    const subscribers = this.videoSubscribers.get(videoId);
+    const subscriberCount = subscribers ? subscribers.size : 0;
+    
+    logger.info(`[WebSocket] Broadcasting ${event} to ${subscriberCount} subscribers for video ${videoId}`);
     this.io.to(`video-${videoId}`).emit(event, data);
-    logger.debug({ videoId, event, data }, 'WebSocket video broadcast');
+    logger.debug({ videoId, event, data, subscriberCount }, 'WebSocket video broadcast');
   }
 
   broadcastToImportSubscribers(jobId: string, event: string, data: any) {

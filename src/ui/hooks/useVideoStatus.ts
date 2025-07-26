@@ -29,8 +29,12 @@ export function useVideoStatus(videoId?: string): VideoStatusHook {
 
   // Subscribe to a specific video
   const subscribe = useCallback((id: string) => {
+    console.log('[useVideoStatus] Subscribing to video:', id);
     if (emit('subscribe:video', id)) {
       logger.info(`Subscribed to video updates: ${id}`);
+      console.log('[useVideoStatus] Successfully subscribed to:', id);
+    } else {
+      console.warn('[useVideoStatus] Failed to subscribe to:', id);
     }
   }, [emit]);
 
@@ -62,6 +66,13 @@ export function useVideoStatus(videoId?: string): VideoStatusHook {
     // Video status update handler
     const handleVideoStatusUpdate = (event: any) => {
       logger.debug('Video status update received:', event);
+      console.log('[useVideoStatus] Status update:', {
+        videoId: event.videoId,
+        status: event.status,
+        progress: event.progress,
+        stage: event.stage,
+        message: event.message
+      });
       
       // Only update if this is for the video we're tracking or if we're tracking all
       if (!videoId || event.videoId === videoId) {

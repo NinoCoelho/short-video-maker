@@ -27,6 +27,9 @@ import {
   LinearProgress,
   useTheme,
   alpha,
+  CircularProgress,
+  Backdrop,
+  Fade,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,9 +40,11 @@ import {
   Settings as SettingsIcon,
   Visibility as PreviewIcon,
   Save as SaveIcon,
+  Movie as MovieIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useVideoStatus } from '../hooks/useVideoStatus';
 import {
   SceneInput,
   RenderConfig,
@@ -67,6 +72,10 @@ const VideoStudio: React.FC = () => {
   const [videoId, setVideoId] = useState<string | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [searchTermInputs, setSearchTermInputs] = useState<{ [key: number]: string }>({});
+  const [isRendering, setIsRendering] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [renderMessage, setRenderMessage] = useState('');
+  const { status: videoStatus, isConnected, subscribe, unsubscribe } = useVideoStatus();
 
   const [formData, setFormData] = useState<FormData>({
     scenes: [
@@ -246,11 +255,33 @@ const VideoStudio: React.FC = () => {
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
+  useEffect(() => {
+    if (videoStatus && videoId) {
+      setRenderProgress(videoStatus.progress || 0);
+      setRenderMessage(videoStatus.message || '');
+      
+      if (videoStatus.status === 'completed' || videoStatus.status === 'ready') {
+        setIsRendering(false);
+        setSuccess('Vídeo criado com sucesso!');
+        setTimeout(() => {
+          navigate(`/video/${videoId}`);
+        }, 1500);
+      } else if (videoStatus.status === 'failed') {
+        setIsRendering(false);
+        setError(videoStatus.error || 'Erro ao criar vídeo');
+        unsubscribe(videoId);
+      }
+    }
+  }, [videoStatus, videoId, navigate, unsubscribe]);
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
       setError(null);
       setSuccess(null);
+      setIsRendering(true);
+      setRenderProgress(0);
+      setRenderMessage('Iniciando criação do vídeo...');
 
       const response = await axios.post('/api/render', {
         scenes: formData.scenes,
@@ -259,14 +290,16 @@ const VideoStudio: React.FC = () => {
 
       const newVideoId = response.data.videoId;
       setVideoId(newVideoId);
-      setSuccess('Vídeo adicionado à fila de processamento!');
       
-      setTimeout(() => {
-        navigate(`/video/${newVideoId}`);
-      }, 2000);
+      // Subscribe to video status updates
+      if (isConnected) {
+        subscribe(newVideoId);
+      }
+      
     } catch (err: any) {
       console.error('Error creating video:', err);
       setError(err.response?.data?.error || 'Erro ao criar vídeo');
+      setIsRendering(false);
     } finally {
       setLoading(false);
     }
@@ -716,6 +749,128 @@ const VideoStudio: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+
+      {/* Rendering Progress Backdrop */}
+      <Backdrop
+        sx={{
+          color: '#fff',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          backdropFilter: 'blur(4px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        }}
+        open={isRendering}
+      >
+        <Fade in={isRendering}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 3,
+              p: 4,
+              backgroundColor: 'background.paper',
+              borderRadius: 2,
+              boxShadow: theme.shadows[24],
+              minWidth: 400,
+              maxWidth: 600,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <MovieIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                Criando seu vídeo
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <CircularProgress
+                  variant="determinate"
+                  value={renderProgress}
+                  size={60}
+                  thickness={4}
+                  sx={{
+                    color: 'primary.main',
+                    '& .MuiCircularProgress-circle': {
+                      strokeLinecap: 'round',
+                    },
+                  }}
+                />
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                    {renderProgress}%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Progresso
+                  </Typography>
+                </Box>
+              </Box>
+
+              <LinearProgress
+                variant="determinate"
+                value={renderProgress}
+                sx={{
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                    background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                  },
+                }}
+              />
+            </Box>
+
+            <Typography 
+              variant="body1" 
+              color="text.secondary"
+              align="center"
+              sx={{ minHeight: 24 }}
+            >
+              {renderMessage || 'Processando...'}
+            </Typography>
+
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                gap: 1,
+                opacity: 0.7,
+              }}
+            >
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                {[0, 1, 2].map((i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: 'primary.main',
+                      animation: 'pulse 1.4s infinite ease-in-out',
+                      animationDelay: `${i * 0.16}s`,
+                      '@keyframes pulse': {
+                        '0%, 80%, 100%': {
+                          transform: 'scale(0.8)',
+                          opacity: 0.5,
+                        },
+                        '40%': {
+                          transform: 'scale(1.2)',
+                          opacity: 1,
+                        },
+                      },
+                    }}
+                  />
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Isso pode levar alguns minutos...
+              </Typography>
+            </Box>
+          </Box>
+        </Fade>
+      </Backdrop>
     </Box>
   );
 };

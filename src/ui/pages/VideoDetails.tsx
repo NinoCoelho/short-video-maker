@@ -14,7 +14,12 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  LinearProgress,
+  Chip,
+  useTheme,
+  alpha,
+  Fade,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -22,11 +27,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import DeleteIcon from '@mui/icons-material/Delete';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import MovieIcon from '@mui/icons-material/Movie';
 import { Video } from '../../types/shorts';
+import { useVideoStatus } from '../hooks/useVideoStatus';
 
 const VideoDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [video, setVideo] = useState<Video | null>(null);
@@ -43,6 +52,9 @@ const VideoDetails: React.FC = () => {
   });
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMounted = useRef(true);
+  
+  // WebSocket status hook
+  const { status: videoStatus, isConnected } = useVideoStatus(id);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -85,25 +97,37 @@ const VideoDetails: React.FC = () => {
 
     fetchVideoDetails();
 
-    const intervalId = setInterval(async () => {
-      if (!id) return;
-      try {
-        const response = await axios.get(`/api/status/${id}`);
-        const statusData = response.data.data || response.data;
-        const newStatus = statusData.status;
-        const newError = statusData.error || null;
-        setStatus(newStatus);
-        setStatusError(newError);
-        if (newStatus === 'ready' || newStatus === 'failed') {
-          clearInterval(intervalId);
+    // Only use polling if WebSocket is not connected
+    if (!isConnected) {
+      const intervalId = setInterval(async () => {
+        if (!id) return;
+        try {
+          const response = await axios.get(`/api/status/${id}`);
+          const statusData = response.data.data || response.data;
+          const newStatus = statusData.status;
+          const newError = statusData.error || null;
+          setStatus(newStatus);
+          setStatusError(newError);
+          if (newStatus === 'ready' || newStatus === 'failed') {
+            clearInterval(intervalId);
+          }
+        } catch (err) {
+          console.error('Error fetching video status update:', err);
         }
-      } catch (err) {
-        console.error('Error fetching video status update:', err);
-      }
-    }, 5000);
+      }, 5000);
 
-    return () => clearInterval(intervalId);
-  }, [id]);
+      intervalRef.current = intervalId;
+      return () => clearInterval(intervalId);
+    }
+  }, [id, isConnected]);
+
+  // Update status from WebSocket
+  useEffect(() => {
+    if (videoStatus) {
+      setStatus(videoStatus.status);
+      setStatusError(videoStatus.error || null);
+    }
+  }, [videoStatus]);
 
   const handleBack = () => {
     navigate('/');
@@ -259,25 +283,191 @@ const VideoDetails: React.FC = () => {
 
     // If we have status but no video data yet, show processing
     if (!video && (status === 'processing' || status === 'pending' || status === 'queued')) {
+      const progress = videoStatus?.progress || 0;
+      const message = videoStatus?.message || 'Processando vídeo...';
+      const stage = videoStatus?.stage || '';
+      
       return (
         <Box textAlign="center" py={4}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
-          <Typography variant="h6">Your video is being created...</Typography>
-          <Typography variant="body1" color="text.secondary">
-            This may take a few minutes. Please wait.
-          </Typography>
+          <Fade in={true}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                p: 4,
+                backgroundColor: alpha(theme.palette.background.paper, 0.9),
+                borderRadius: 2,
+                boxShadow: theme.shadows[1],
+                maxWidth: 600,
+                mx: 'auto',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <MovieIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+                <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  Criando seu vídeo
+                </Typography>
+              </Box>
+
+              <Box sx={{ width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {stage}
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                    {progress}%
+                  </Typography>
+                </Box>
+
+                <LinearProgress
+                  variant="determinate"
+                  value={progress}
+                  sx={{
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                    },
+                  }}
+                />
+              </Box>
+
+              <Typography 
+                variant="body1" 
+                color="text.secondary"
+                align="center"
+                sx={{ minHeight: 24 }}
+              >
+                {message}
+              </Typography>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <HourglassEmptyIcon 
+                  sx={{ 
+                    fontSize: 20, 
+                    color: 'text.secondary',
+                    animation: 'spin 2s linear infinite',
+                    '@keyframes spin': {
+                      '0%': { transform: 'rotate(0deg)' },
+                      '100%': { transform: 'rotate(360deg)' },
+                    },
+                  }} 
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Isso pode levar alguns minutos...
+                </Typography>
+              </Box>
+
+              {isConnected && (
+                <Chip 
+                  label="Conectado" 
+                  size="small" 
+                  color="success" 
+                  variant="outlined"
+                  sx={{ opacity: 0.7 }}
+                />
+              )}
+            </Box>
+          </Fade>
         </Box>
       );
     }
 
     if (status === 'processing') {
+      const progress = videoStatus?.progress || 0;
+      const message = videoStatus?.message || 'Processando vídeo...';
+      const stage = videoStatus?.stage || '';
+      
       return (
         <Box textAlign="center" py={4}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
-          <Typography variant="h6">Your video is being created...</Typography>
-          <Typography variant="body1" color="text.secondary">
-            This may take a few minutes. Please wait.
-          </Typography>
+          <Fade in={true}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                p: 4,
+                backgroundColor: alpha(theme.palette.background.paper, 0.9),
+                borderRadius: 2,
+                boxShadow: theme.shadows[1],
+                maxWidth: 600,
+                mx: 'auto',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <MovieIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+                <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  Criando seu vídeo
+                </Typography>
+              </Box>
+
+              <Box sx={{ width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {stage}
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                    {progress}%
+                  </Typography>
+                </Box>
+
+                <LinearProgress
+                  variant="determinate"
+                  value={progress}
+                  sx={{
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                    },
+                  }}
+                />
+              </Box>
+
+              <Typography 
+                variant="body1" 
+                color="text.secondary"
+                align="center"
+                sx={{ minHeight: 24 }}
+              >
+                {message}
+              </Typography>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <HourglassEmptyIcon 
+                  sx={{ 
+                    fontSize: 20, 
+                    color: 'text.secondary',
+                    animation: 'spin 2s linear infinite',
+                    '@keyframes spin': {
+                      '0%': { transform: 'rotate(0deg)' },
+                      '100%': { transform: 'rotate(360deg)' },
+                    },
+                  }} 
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Isso pode levar alguns minutos...
+                </Typography>
+              </Box>
+
+              {isConnected && (
+                <Chip 
+                  label="Conectado" 
+                  size="small" 
+                  color="success" 
+                  variant="outlined"
+                  sx={{ opacity: 0.7 }}
+                />
+              )}
+            </Box>
+          </Fade>
         </Box>
       );
     }

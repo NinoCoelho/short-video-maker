@@ -211,29 +211,57 @@ const IAScriptStudio: React.FC = () => {
 
   // Monitor video rendering progress
   useEffect(() => {
+    console.log('[IAScriptStudio] Video monitoring:', {
+      hasVideoStatus: !!videoStatus,
+      renderingVideoId,
+      videoStatusId: videoStatus?.id,
+      matches: videoStatus?.id === renderingVideoId,
+      videoStatus
+    });
+    
     if (!videoStatus || !renderingVideoId || videoStatus.id !== renderingVideoId) return;
+
+    console.log('Video status update:', {
+      status: videoStatus.status,
+      progress: videoStatus.progress,
+      stage: videoStatus.stage,
+      message: videoStatus.message
+    });
 
     switch (videoStatus.status) {
       case 'processing':
+      case 'pending':
+      case 'queued':
         const progressPercent = Math.round(videoStatus.progress || 0);
         setRenderProgress(progressPercent);
-        setGenerationStep(videoStatus.stage || 'Renderizando vídeo...');
+        setGenerationStep(videoStatus.message || videoStatus.stage || 'Renderizando vídeo...');
         break;
 
       case 'completed':
-        setCompletedVideoId(renderingVideoId);
-        setRenderingVideoId(null);
+      case 'ready':
+        console.log('[IAScriptStudio] Video completed:', {
+          renderingVideoId,
+          isGenerating,
+          completedVideoId
+        });
         setRenderProgress(100);
         setGenerationStep('Vídeo pronto!');
-        unsubscribe(renderingVideoId);
-        setIsGenerating(false);
-        // Auto-play video when ready
+        
+        // Small delay to ensure video file is ready
         setTimeout(() => {
-          if (videoRef.current) {
-            videoRef.current.play();
-            setIsPlaying(true);
-          }
-        }, 500);
+          setCompletedVideoId(renderingVideoId);
+          setRenderingVideoId(null);
+          setIsGenerating(false);
+          unsubscribe(renderingVideoId);
+          
+          // Auto-play video when ready
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.play();
+              setIsPlaying(true);
+            }
+          }, 500);
+        }, 100);
         break;
 
       case 'failed':
@@ -352,10 +380,22 @@ const IAScriptStudio: React.FC = () => {
         }
       );
 
-      const { videoId } = response.data;
+      console.log('[IAScriptStudio] Render response:', response.data);
       
-      console.log('Starting to monitor video:', videoId);
+      // The API returns data wrapped in a data property
+      const videoId = response.data?.data?.videoId || response.data?.videoId;
+      
+      console.log('[IAScriptStudio] Starting to monitor video:', videoId);
+      if (!videoId) {
+        console.error('[IAScriptStudio] No videoId received from render response:', response.data);
+        setError('Erro ao iniciar renderização - ID do vídeo não recebido');
+        setIsGenerating(false);
+        return;
+      }
+      
       setRenderingVideoId(videoId);
+      setRenderProgress(0); // Reset progress
+      setGenerationStep('Iniciando renderização...');
       subscribe(videoId);
       
     } catch (err) {
@@ -669,6 +709,15 @@ const IAScriptStudio: React.FC = () => {
         </Card>
       )}
 
+      {/* Debug Info */}
+      {console.log('[IAScriptStudio] Render state:', {
+        isGenerating,
+        completedVideoId,
+        renderingVideoId,
+        showProgress: isGenerating && !completedVideoId,
+        showVideo: !!completedVideoId
+      })}
+
       {/* Video Result */}
       {completedVideoId && (
         <Grow in timeout={500}>
@@ -684,7 +733,7 @@ const IAScriptStudio: React.FC = () => {
                     startIcon={<DownloadIcon />}
                     onClick={() => {
                       const link = document.createElement('a');
-                      link.href = `http://localhost:3233/api/video/${completedVideoId}`;
+                      link.href = `/api/video/${completedVideoId}`;
                       link.download = `video-${completedVideoId}.mp4`;
                       link.click();
                     }}
@@ -719,7 +768,9 @@ const IAScriptStudio: React.FC = () => {
                     height: 'auto',
                     display: 'block',
                   }}
-                  src={`http://localhost:3233/api/video/${completedVideoId}`}
+                  src={`/api/video/${completedVideoId}`}
+                  onLoadedData={() => console.log('[IAScriptStudio] Video loaded:', completedVideoId)}
+                  onError={(e) => console.error('[IAScriptStudio] Video error:', e)}
                 >
                   Seu navegador não suporta vídeo HTML5.
                 </video>
