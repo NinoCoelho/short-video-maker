@@ -2,76 +2,57 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Container,
-  Grid,
   Paper,
   Typography,
   TextField,
   Button,
   IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   Chip,
-  Avatar,
-  Divider,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Card,
   CardContent,
-  CardActions,
-  Tooltip,
-  Badge,
   LinearProgress,
-  Fab,
-  Menu,
   alpha,
   useTheme,
+  Slider,
+  Switch,
+  FormControlLabel,
+  Collapse,
+  Fade,
+  Grow,
+  Divider,
 } from '@mui/material';
 import {
-  Send as SendIcon,
-  SmartToy as AIIcon,
-  Person as PersonIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
   PlayArrow as PlayIcon,
+  Pause as PauseIcon,
   VideoCall as VideoCallIcon,
   Settings as SettingsIcon,
-  Code as CodeIcon,
-  Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Psychology as PsychologyIcon,
-  ViewModule as TemplateIcon,
+  AutoAwesome as MagicIcon,
+  Download as DownloadIcon,
+  Refresh as RefreshIcon,
+  MusicNote as MusicIcon,
+  RecordVoiceOver as VoiceIcon,
+  Language as LanguageIcon,
+  AspectRatio as AspectRatioIcon,
+  TextFields as TextIcon,
+  Palette as PaletteIcon,
+  VolumeUp as VolumeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { useVideoStatus } from '../hooks/useVideoStatus';
 import {
   ScriptSession,
-  ScriptTemplate,
-  ChatMessage,
-  PlaceholderDefinition,
   SendChatMessageRequest,
 } from '../../types/iaScript';
-import { RenderConfig, VoiceEnum, OrientationEnum, MusicMood } from '../../types/shorts';
-
-// Sub-components
-import ConfigPanel from '../components/ia-script/ConfigPanel';
-import PlaceholderInput from '../components/ia-script/PlaceholderInput';
-import TemplateManager from '../components/ia-script/TemplateManager';
+import { RenderConfig, VoiceEnum, OrientationEnum, CaptionPositionEnum, MusicVolumeEnum } from '../../types/shorts';
 
 // Create axios instance with correct backend URL
 const api = axios.create({
@@ -81,51 +62,17 @@ const api = axios.create({
   },
 });
 
-const IAScriptStudio: React.FC = () => {
-  const theme = useTheme();
-  const navigate = useNavigate();
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Main state
-  const [session, setSession] = useState<ScriptSession | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  
-  // Progress states
-  const [generationStep, setGenerationStep] = useState<string>('');
-  const [renderProgress, setRenderProgress] = useState<number>(0);
-  
-  // Video rendering states
-  const [renderingVideoId, setRenderingVideoId] = useState<string | null>(null);
-  const [completedVideoId, setCompletedVideoId] = useState<string | null>(null);
-  
-  // WebSocket for video status updates
-  const { status: videoStatus, subscribe, unsubscribe, isConnected } = useVideoStatus();
-  
-  // Debug WebSocket connection
-  useEffect(() => {
-    console.log('WebSocket connection status:', isConnected);
-    if (videoStatus) {
-      console.log('Video status update:', videoStatus);
+// Load saved settings from localStorage
+const loadSavedSettings = (): RenderConfig => {
+  const saved = localStorage.getItem('iaScriptStudioSettings');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      console.error('Failed to parse saved settings:', e);
     }
-  }, [isConnected, videoStatus]);
-
-  // Removed file management - files no longer supported
-
-  // Template management
-  const [templates, setTemplates] = useState<ScriptTemplate[]>([]);
-  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<ScriptTemplate | null>(null);
-
-  // Placeholder management
-  const [placeholders, setPlaceholders] = useState<PlaceholderDefinition[]>([]);
-  const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
-
-  // Video configuration
-  const [videoConfig, setVideoConfig] = useState<RenderConfig>({
+  }
+  return {
     voice: VoiceEnum.Paulo,
     orientation: OrientationEnum.portrait,
     language: 'pt',
@@ -134,94 +81,170 @@ const IAScriptStudio: React.FC = () => {
     captionBackgroundColor: '#000000',
     captionTextColor: '#ffffff',
     paddingBack: 3000,
-    captionsEnabled: true, // Always enable captions for IA Script
-    overlay: '', // Will be set from ConfigPanel
-    hook: '', // Will be set to script title when generated
+    captionsEnabled: true,
+    overlay: '',
+    hook: '',
     musicVolume: 'medium',
-  });
+  };
+};
 
+// Save settings to localStorage
+const saveSettings = (settings: RenderConfig) => {
+  localStorage.setItem('iaScriptStudioSettings', JSON.stringify(settings));
+};
+
+// Progress animation component
+const GenerationProgress: React.FC<{ progress: number; stage: string }> = ({ progress, stage }) => {
+  const theme = useTheme();
+  
+  return (
+    <Fade in timeout={500}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center',
+        gap: 3,
+        py: 6,
+      }}>
+        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+          <CircularProgress
+            variant="determinate"
+            value={progress}
+            size={120}
+            thickness={4}
+            sx={{
+              color: theme.palette.primary.main,
+              [`& .MuiCircularProgress-circle`]: {
+                strokeLinecap: 'round',
+              },
+            }}
+          />
+          <Box
+            sx={{
+              top: 0,
+              left: 0,
+              bottom: 0,
+              right: 0,
+              position: 'absolute',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Box sx={{ textAlign: 'center' }}>
+              <MagicIcon sx={{ fontSize: 40, color: theme.palette.primary.main, mb: 1 }} />
+              <Typography variant="h6" component="div" color="text.secondary">
+                {progress}%
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+        
+        <Typography variant="h5" color="primary" fontWeight="medium">
+          Criando seu vídeo
+        </Typography>
+        
+        <Typography variant="body1" color="text.secondary" textAlign="center">
+          {stage}
+        </Typography>
+        
+        <LinearProgress
+          variant="determinate"
+          value={progress}
+          sx={{ 
+            width: '60%', 
+            height: 8, 
+            borderRadius: 4,
+            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+            '& .MuiLinearProgress-bar': {
+              borderRadius: 4,
+              background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+            },
+          }}
+        />
+      </Box>
+    </Fade>
+  );
+};
+
+const IAScriptStudio: React.FC = () => {
+  const theme = useTheme();
+  const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Main state
+  const [session, setSession] = useState<ScriptSession | null>(null);
+  const [promptText, setPromptText] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Progress states
+  const [generationStep, setGenerationStep] = useState<string>('');
+  const [generationProgress, setGenerationProgress] = useState<number>(0);
+  const [renderProgress, setRenderProgress] = useState<number>(0);
+  
+  // Video states
+  const [renderingVideoId, setRenderingVideoId] = useState<string | null>(null);
+  const [completedVideoId, setCompletedVideoId] = useState<string | null>(null);
+  const [currentScript, setCurrentScript] = useState<any>(null);
+  
+  // WebSocket for video status updates
+  const { status: videoStatus, subscribe, unsubscribe, isConnected } = useVideoStatus();
+  
+  // Video configuration with saved settings
+  const [videoConfig, setVideoConfig] = useState<RenderConfig>(loadSavedSettings());
+  
   // UI state
-  const [showConfigPanel, setShowConfigPanel] = useState(true);
-  const [showScriptReview, setShowScriptReview] = useState(false);
-  const [reviewingScript, setReviewingScript] = useState<any>(null);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Initialize session on mount
   useEffect(() => {
     initializeSession();
-    loadTemplates();
   }, []);
-
-  // Auto-scroll to bottom on new messages
+  
+  // Save settings whenever they change
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    saveSettings(videoConfig);
+  }, [videoConfig]);
 
-  // Monitor video rendering progress and add updates to chat
+  // Monitor video rendering progress
   useEffect(() => {
     if (!videoStatus || !renderingVideoId || videoStatus.id !== renderingVideoId) return;
-
-    const addProgressMessage = (content: string, isComplete: boolean = false) => {
-      const progressMessage: ChatMessage = {
-        id: `progress-${Date.now()}`,
-        role: 'assistant',
-        content,
-        timestamp: new Date(),
-        metadata: {
-          isProgress: true,
-          videoId: renderingVideoId,
-          isComplete
-        }
-      };
-
-      setMessages(prev => {
-        // Remove previous progress messages for this video
-        const filtered = prev.filter(msg => 
-          !(msg.metadata?.isProgress && msg.metadata?.videoId === renderingVideoId && !msg.metadata?.isComplete)
-        );
-        return [...filtered, progressMessage];
-      });
-    };
 
     switch (videoStatus.status) {
       case 'processing':
         const progressPercent = Math.round(videoStatus.progress || 0);
-        const stage = videoStatus.stage || 'Processando';
-        addProgressMessage(
-          `🎬 **Renderizando vídeo** (${progressPercent}%)\n\n` +
-          `📍 **Status**: ${stage}\n` +
-          `${videoStatus.message ? `💬 ${videoStatus.message}\n` : ''}` +
-          `⏰ Aguarde enquanto criamos seu vídeo...`
-        );
+        setRenderProgress(progressPercent);
+        setGenerationStep(videoStatus.stage || 'Renderizando vídeo...');
         break;
 
       case 'completed':
-        addProgressMessage(
-          `✅ **Vídeo renderizado com sucesso!**\n\n` +
-          `🎯 **ID do vídeo**: ${renderingVideoId}\n` +
-          `📺 Seu vídeo está pronto para visualização\n\n` +
-          `💡 **Próximos passos:**\n` +
-          `• Visualize o resultado abaixo\n` +
-          `• Faça ajustes se necessário\n` +
-          `• Ou continue editando no chat`,
-          true
-        );
         setCompletedVideoId(renderingVideoId);
         setRenderingVideoId(null);
+        setRenderProgress(100);
+        setGenerationStep('Vídeo pronto!');
         unsubscribe(renderingVideoId);
+        setIsGenerating(false);
+        // Auto-play video when ready
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.play();
+            setIsPlaying(true);
+          }
+        }, 500);
         break;
 
       case 'failed':
-        addProgressMessage(
-          `❌ **Erro na renderização**\n\n` +
-          `🚫 **Erro**: ${videoStatus.error || 'Erro desconhecido'}\n` +
-          `💡 Tente renderizar novamente ou faça ajustes no script`,
-          true
-        );
+        setError(videoStatus.error || 'Erro ao renderizar vídeo');
         setRenderingVideoId(null);
+        setIsGenerating(false);
+        setRenderProgress(0);
         unsubscribe(renderingVideoId);
         break;
     }
-  }, [videoStatus, renderingVideoId, subscribe, unsubscribe]);
+  }, [videoStatus, renderingVideoId, unsubscribe]);
 
   const initializeSession = async () => {
     try {
@@ -229,10 +252,7 @@ const IAScriptStudio: React.FC = () => {
         config: videoConfig,
       });
       const sessionData = response.data.data?.session || response.data.session || response.data;
-      console.log('Session response:', response.data);
-      console.log('Session data:', sessionData);
       setSession(sessionData);
-      setMessages(sessionData.conversationHistory || []);
     } catch (err: any) {
       console.error('Failed to create session:', err);
       const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Falha ao iniciar sessão';
@@ -240,108 +260,43 @@ const IAScriptStudio: React.FC = () => {
     }
   };
 
-
-  const loadTemplates = async () => {
-    try {
-      const response = await api.get('/api/ia-script/templates');
-      setTemplates(response.data.templates || []);
-    } catch (err) {
-      console.error('Failed to load templates:', err);
-    }
-  };
-
-
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || !session || isGenerating) return;
+  const handleGenerateVideo = async () => {
+    if (!promptText.trim() || !session || isGenerating) return;
     
     if (!session.id) {
-      console.error('Session ID is missing:', session);
-      setError('Sessão não inicializada corretamente. Por favor, recarregue a página.');
+      setError('Sessão não inicializada. Por favor, recarregue a página.');
       return;
     }
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputText,
-      timestamp: new Date(),
-      metadata: {
-        placeholdersResolved: placeholderValues,
-      },
-    };
-
-    setMessages([...messages, userMessage]);
-    setInputText('');
     setIsGenerating(true);
     setError(null);
-    setGenerationStep('Processando prompt...');
+    setGenerationStep('Analisando seu prompt...');
+    setGenerationProgress(10);
+    setCompletedVideoId(null);
 
     try {
-      // Build context-aware prompt with current script and conversation history
-      let contextualContent = inputText;
-      
-      // Add script context and conversation history if available
-      if (session.currentScript) {
-        // Build conversation history context
-        const conversationHistory = messages
-          .filter(msg => msg.role === 'user' && !msg.metadata?.isProgress)
-          .map((msg, index) => `${index + 1}. ${msg.content}`)
-          .join('\n');
-
-        const scriptContext = `CONTEXTO COMPLETO DA CONVERSA:
-
-HISTÓRICO DE SOLICITAÇÕES:
-${conversationHistory}
-
-SCRIPT ATUAL:
-Título: ${session.currentScript.title}
-Descrição: ${session.currentScript.description || 'N/A'}
-Total de cenas: ${session.currentScript.metadata.totalScenes}
-Duração estimada: ${session.currentScript.metadata.estimatedDuration}s
-
-CENAS ATUAIS:
-${session.currentScript.scenes.map((scene, index) => 
-  `Cena ${index + 1}: (${scene.duration}) ${scene.text}
-  Visual: ${scene.visualSuggestion || 'N/A'}
-  Palavras-chave: ${scene.searchKeywords?.join(', ') || 'N/A'}`
-).join('\n\n')}
-
----
-
-NOVA SOLICITAÇÃO:
-${inputText}
-
-INSTRUÇÕES:
-- Considere todo o contexto da conversa anterior
-- Mantenha a estrutura do script atual se for uma modificação
-- Se for uma alteração específica, ajuste apenas o que foi solicitado
-- Se for um novo script, ignore o contexto anterior
-- Sempre retorne o script completo atualizado`;
-        
-        contextualContent = scriptContext;
-      }
-
-      const request: SendChatMessageRequest = {
-        content: contextualContent,
-        placeholderValues,
-      };
-
       // Simulate progress steps
       const progressSteps = [
-        { delay: 500, step: 'Analisando contexto...' },
-        { delay: 1500, step: 'Gerando estrutura do script...' },
-        { delay: 2500, step: 'Criando cenas...' },
-        { delay: 3500, step: 'Otimizando roteiro...' },
+        { delay: 500, progress: 20, step: 'Gerando roteiro...' },
+        { delay: 1500, progress: 40, step: 'Criando estrutura do vídeo...' },
+        { delay: 2500, progress: 60, step: 'Preparando cenas...' },
+        { delay: 3500, progress: 80, step: 'Finalizando script...' },
       ];
 
       // Start progress simulation
-      progressSteps.forEach(({ delay, step }) => {
+      progressSteps.forEach(({ delay, progress, step }) => {
         setTimeout(() => {
           if (isGenerating) {
             setGenerationStep(step);
+            setGenerationProgress(progress);
           }
         }, delay);
       });
+
+      const request: SendChatMessageRequest = {
+        content: promptText,
+        placeholderValues: {},
+      };
 
       const response = await api.post(
         `/api/ia-script/sessions/${session.id}/chat`,
@@ -349,480 +304,463 @@ INSTRUÇÕES:
       );
 
       const responseData = response.data.data || response.data;
-      const { script, message: assistantMessage } = responseData;
-
-      setMessages(prev => [...prev, assistantMessage]);
+      const { script } = responseData;
       
       if (script) {
-        setSession(prev => prev ? { ...prev, currentScript: script } : null);
-        // Automatically set the hook to the script title
+        setCurrentScript(script);
         setVideoConfig(prev => ({ ...prev, hook: script.title || 'Meu Vídeo' }));
-        setSuccess('Script gerado com sucesso!');
+        setGenerationProgress(100);
+        setGenerationStep('Script pronto! Iniciando renderização...');
+        
+        // Immediately start rendering
+        setTimeout(() => {
+          handleRenderVideo(script);
+        }, 1000);
       }
     } catch (err: any) {
-      let errorMessage = 'Ocorreu um erro ao gerar o script.';
+      setIsGenerating(false);
+      setGenerationProgress(0);
       
-      // Extract error message from different possible formats
+      let errorMessage = 'Erro ao gerar o script.';
       if (err.response?.data?.error) {
         errorMessage = err.response.data.error;
-      } else if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.response?.data?.details) {
-        errorMessage = err.response.data.details;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      // Add recovery suggestions based on error type
-      if (err.response?.status === 500 || errorMessage.includes('Script generation failed')) {
-        errorMessage = '😔 Não foi possível gerar o script. Tente novamente ou simplifique seu prompt.';
-      } else if (err.response?.status === 429) {
-        errorMessage = '⏱️ Muitas requisições! Aguarde alguns segundos antes de tentar novamente.';
-      } else if (err.response?.status === 401) {
-        errorMessage = '🔑 Erro de autenticação. Verifique as configurações da API.';
-      } else if (!navigator.onLine) {
-        errorMessage = '📡 Sem conexão com a internet. Verifique sua conexão e tente novamente.';
       }
       
       setError(errorMessage);
-      
-      // Add error message to chat
-      const errorAssistantMessage: ChatMessage = {
-        id: Date.now().toString() + '-error',
-        role: 'assistant',
-        content: `❌ ${errorMessage}\n\n💡 Dica: Tente ser mais específico no seu prompt ou verifique se todos os serviços estão funcionando corretamente.`,
-        timestamp: new Date(),
-        metadata: {
-          isError: true,
-          canRetry: true,
-          originalPrompt: inputText
-        }
-      };
-      setMessages(prev => [...prev, errorAssistantMessage]);
-    } finally {
-      setIsGenerating(false);
-      setGenerationStep('');
     }
   };
 
-  const handleTemplateSelect = async (template: ScriptTemplate) => {
-    setSuccess(`Carregando template "${template.name}"...`);
-    try {
-      const response = await api.post(`/api/ia-script/templates/${template.id}/use`, {
-        config: videoConfig,
-      });
-
-      setSession(response.data.session);
-      setMessages([]);
-      setInputText(template.promptTemplate);
-      setPlaceholders(template.placeholders);
-      setVideoConfig({ ...videoConfig, ...template.defaultConfig });
-      
-      // File associations removed
-      
-      setShowTemplateDialog(false);
-      setSuccess(`Template "${template.name}" carregado com sucesso!`);
-    } catch (err) {
-      setError('Falha ao carregar template');
-    }
-  };
-
-  const handleSaveAsTemplate = async () => {
-    if (!inputText.trim()) {
-      setError('Digite um prompt antes de salvar como template');
-      return;
-    }
-
-    setEditingTemplate({
-      id: '',
-      name: '',
-      description: '',
-      promptTemplate: inputText,
-      placeholders: placeholders,
-      defaultConfig: videoConfig,
-      fileAssociations: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      usageCount: 0,
-      isPublic: false,
-    });
-    setShowTemplateDialog(true);
-  };
-
-  const handleRenderVideo = async (immediate: boolean = false) => {
-    if (!session?.currentScript) {
-      setError('Nenhum script gerado ainda');
-      return;
-    }
+  const handleRenderVideo = async (script: any) => {
+    if (!session) return;
 
     try {
+      setGenerationStep('Iniciando renderização do vídeo...');
+      setRenderProgress(0);
+      
       const response = await api.post(
         `/api/ia-script/sessions/${session.id}/render`,
         { 
-          immediate: true, // Always render immediately in chat
-          config: videoConfig // Pass current UI config for rendering
+          immediate: true,
+          config: videoConfig
         }
       );
 
       const { videoId } = response.data;
       
-      // Add initial rendering message to chat
-      const renderMessage: ChatMessage = {
-        id: `render-start-${Date.now()}`,
-        role: 'assistant',
-        content: `🚀 **Iniciando renderização do vídeo**\n\n` +
-                `🎬 **ID do vídeo**: ${videoId}\n` +
-                `⏱️ **Status**: Preparando renderização...\n\n` +
-                `💫 Acompanhe o progresso em tempo real abaixo!`,
-        timestamp: new Date(),
-        metadata: {
-          isProgress: true,
-          videoId: videoId,
-          isComplete: false
-        }
-      };
-
-      setMessages(prev => [...prev, renderMessage]);
-      
-      // Start monitoring this video
       console.log('Starting to monitor video:', videoId);
       setRenderingVideoId(videoId);
       subscribe(videoId);
       
-      setSuccess('Renderização iniciada! Acompanhe o progresso no chat.');
-      
-      // Also add debug logs to track subscription
-      setTimeout(() => {
-        console.log('Current renderingVideoId:', renderingVideoId);
-        console.log('Current videoStatus:', videoStatus);
-      }, 1000);
-      
     } catch (err) {
       setError('Falha ao iniciar renderização do vídeo');
+      setIsGenerating(false);
     }
   };
 
+  const handleNewVideo = () => {
+    setPromptText('');
+    setCompletedVideoId(null);
+    setCurrentScript(null);
+    setGenerationProgress(0);
+    setRenderProgress(0);
+    setIsGenerating(false);
+    setGenerationStep('');
+  };
+
+  const handleConfigChange = (field: keyof RenderConfig, value: any) => {
+    setVideoConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleVideo = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const musicMoods = [
+    { value: 'happy', label: 'Alegre', color: '#FFC107' },
+    { value: 'sad', label: 'Triste', color: '#607D8B' },
+    { value: 'excited', label: 'Animado', color: '#FF5722' },
+    { value: 'chill', label: 'Relaxante', color: '#00BCD4' },
+    { value: 'inspirational', label: 'Inspiracional', color: '#9C27B0' },
+    { value: 'cinematic', label: 'Cinematográfico', color: '#3F51B5' },
+    { value: 'worship', label: 'Adoração', color: '#795548' },
+  ];
+
+  const voices = [
+    { value: VoiceEnum.Paulo, label: 'Paulo', lang: 'pt' },
+    { value: VoiceEnum.Noel, label: 'Noel', lang: 'pt' },
+    { value: VoiceEnum.Scarlett, label: 'Scarlett', lang: 'en' },
+    { value: VoiceEnum.NinoCoelho, label: 'Nino Coelho', lang: 'pt' },
+  ];
+
   return (
-    <Container maxWidth={false} sx={{ height: '100vh', py: 0.5 }}>
-      <Grid container spacing={2} sx={{ height: '100%' }}>
-        {/* Center - Chat Interface */}
-        <Grid item xs={12} md={showConfigPanel ? 9 : 12}>
-          <Paper
-            elevation={3}
-            sx={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              bgcolor: theme.palette.background.default,
-            }}
-          >
-            {/* Header */}
-            <Box
-              sx={{
-                p: 1,
-                borderBottom: 1,
-                borderColor: 'divider',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                minHeight: 56,
-              }}
-            >
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Tooltip title="Templates">
-                  <IconButton size="small" onClick={() => setShowTemplateDialog(true)}>
-                    <Badge badgeContent={templates?.length || 0} color="primary">
-                      <TemplateIcon />
-                    </Badge>
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Salvar como Template">
-                  <IconButton 
-                    size="small" 
-                    onClick={handleSaveAsTemplate}
-                    disabled={!inputText.trim()}
-                  >
-                    <SaveIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Tooltip title={showConfigPanel ? 'Ocultar configurações' : 'Mostrar configurações'}>
-                  <IconButton size="small" onClick={() => setShowConfigPanel(!showConfigPanel)}>
-                    <SettingsIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Box>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ mb: 4, textAlign: 'center' }}>
+        <Typography variant="h3" fontWeight="bold" gutterBottom>
+          IA Script Studio
+        </Typography>
+        <Typography variant="h6" color="text.secondary">
+          Crie vídeos incríveis com inteligência artificial
+        </Typography>
+      </Box>
 
-            {/* Messages */}
-            <Box
-              sx={{
-                flex: 1,
-                overflow: 'auto',
-                p: 1.5,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-                maxHeight: 'calc(100vh - 280px)',
-              }}
-            >
-              {messages.map((message) => (
-                <Box
-                  key={message.id}
+      {/* Main Content */}
+      {!isGenerating && !completedVideoId && (
+        <Fade in timeout={500}>
+          <Card elevation={3}>
+            <CardContent sx={{ p: 4 }}>
+              {/* Prompt Input */}
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <MagicIcon color="primary" />
+                  Descreva seu vídeo
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  placeholder="Digite aqui a descrição do vídeo que você deseja criar..."
+                  variant="outlined"
                   sx={{
-                    display: 'flex',
-                    gap: 2,
-                    alignItems: 'flex-start',
-                    flexDirection: message.role === 'user' ? 'row-reverse' : 'row',
+                    mt: 2,
+                    '& .MuiOutlinedInput-root': {
+                      fontSize: '1.1rem',
+                      backgroundColor: alpha(theme.palette.primary.main, 0.02),
+                    },
                   }}
-                >
-                  <Avatar
-                    sx={{
-                      bgcolor: message.role === 'user' 
-                        ? theme.palette.primary.main 
-                        : theme.palette.secondary.main,
-                    }}
-                  >
-                    {message.role === 'user' ? <PersonIcon /> : <AIIcon />}
-                  </Avatar>
-                  
-                  <Paper
-                    sx={{
-                      p: 2,
-                      maxWidth: '70%',
-                      bgcolor: message.metadata?.isError
-                        ? alpha(theme.palette.error.main, 0.1)
-                        : message.role === 'user'
-                        ? alpha(theme.palette.primary.main, 0.1)
-                        : alpha(theme.palette.secondary.main, 0.1),
-                      borderLeft: message.metadata?.isError ? `4px solid ${theme.palette.error.main}` : 'none',
-                    }}
-                  >
-                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                      {message.content}
-                    </Typography>
-                    
-                    {/* Show review button if this message has a script */}
-                    {message.metadata?.hasScript && message.metadata?.scriptData && (
-                      <Box sx={{ mt: 2 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={() => {
-                            setReviewingScript(message.metadata.scriptData);
-                            setShowScriptReview(true);
-                          }}
-                          startIcon={<EditIcon />}
-                          sx={{
-                            background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
-                            '&:hover': {
-                              background: 'linear-gradient(45deg, #5b21b6, #7c3aed)',
-                            }
-                          }}
-                        >
-                          📋 Revisar Script
-                        </Button>
-                      </Box>
-                    )}
-                    
-                    {/* Show video player if this is a completed video message */}
-                    {message.metadata?.isComplete && message.metadata?.videoId && (
-                      <Box sx={{ mt: 2 }}>
-                        <Paper 
-                          sx={{ 
-                            p: 2, 
-                            bgcolor: alpha(theme.palette.primary.main, 0.05),
-                            border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`
-                          }}
-                        >
-                          <Typography variant="h6" gutterBottom>
-                            🎬 Visualização do Vídeo
-                          </Typography>
-                          <video
-                            controls
-                            style={{
-                              width: '100%',
-                              maxWidth: '400px',
-                              height: 'auto',
-                              borderRadius: '8px'
-                            }}
-                            src={`http://localhost:3233/api/video/${message.metadata.videoId}`}
-                          >
-                            Seu navegador não suporta vídeo HTML5.
-                          </video>
-                          <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => window.open(`http://localhost:3233/video/${message.metadata.videoId}`, '_blank')}
-                              startIcon={<PlayIcon />}
-                            >
-                              Ver Detalhes
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => {
-                                const link = document.createElement('a');
-                                link.href = `http://localhost:3233/api/video/${message.metadata.videoId}`;
-                                link.download = `video-${message.metadata.videoId}.mp4`;
-                                link.click();
-                              }}
-                              startIcon={<PlayIcon />}
-                            >
-                              Download
-                            </Button>
+                />
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Basic Settings */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Configurações Básicas
+                </Typography>
+                
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, mt: 2 }}>
+                  {/* Voice Selection */}
+                  <FormControl fullWidth>
+                    <InputLabel><VoiceIcon sx={{ mr: 1, fontSize: 20 }} />Voz</InputLabel>
+                    <Select
+                      value={videoConfig.voice}
+                      onChange={(e) => handleConfigChange('voice', e.target.value)}
+                      label="Voz"
+                    >
+                      {voices.map((voice) => (
+                        <MenuItem key={voice.value} value={voice.value}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {voice.label}
+                            <Chip size="small" label={voice.lang} />
                           </Box>
-                        </Paper>
-                      </Box>
-                    )}
-                    
-                    {message.metadata?.canRetry && (
-                      <Box sx={{ mt: 2 }}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          onClick={() => {
-                            setInputText(message.metadata.originalPrompt || '');
-                            // Remove error message
-                            setMessages(prev => prev.filter(m => m.id !== message.id));
-                          }}
-                          startIcon={<PlayIcon />}
-                        >
-                          Tentar Novamente
-                        </Button>
-                      </Box>
-                    )}
-                    
-                    
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      {format(new Date(message.timestamp), 'HH:mm', { locale: ptBR })}
-                    </Typography>
-                  </Paper>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {/* Orientation */}
+                  <FormControl fullWidth>
+                    <InputLabel><AspectRatioIcon sx={{ mr: 1, fontSize: 20 }} />Orientação</InputLabel>
+                    <Select
+                      value={videoConfig.orientation}
+                      onChange={(e) => handleConfigChange('orientation', e.target.value)}
+                      label="Orientação"
+                    >
+                      <MenuItem value={OrientationEnum.portrait}>Vertical (9:16)</MenuItem>
+                      <MenuItem value={OrientationEnum.landscape}>Horizontal (16:9)</MenuItem>
+                      <MenuItem value={OrientationEnum.square}>Quadrado (1:1)</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  {/* Language */}
+                  <FormControl fullWidth>
+                    <InputLabel><LanguageIcon sx={{ mr: 1, fontSize: 20 }} />Idioma</InputLabel>
+                    <Select
+                      value={videoConfig.language}
+                      onChange={(e) => handleConfigChange('language', e.target.value)}
+                      label="Idioma"
+                    >
+                      <MenuItem value="pt">Português</MenuItem>
+                      <MenuItem value="en">English</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  {/* Music Volume */}
+                  <FormControl fullWidth>
+                    <InputLabel><VolumeIcon sx={{ mr: 1, fontSize: 20 }} />Volume da Música</InputLabel>
+                    <Select
+                      value={videoConfig.musicVolume || MusicVolumeEnum.medium}
+                      onChange={(e) => handleConfigChange('musicVolume', e.target.value)}
+                      label="Volume da Música"
+                    >
+                      <MenuItem value={MusicVolumeEnum.muted}>Mudo</MenuItem>
+                      <MenuItem value={MusicVolumeEnum.low}>Baixo</MenuItem>
+                      <MenuItem value={MusicVolumeEnum.medium}>Médio</MenuItem>
+                      <MenuItem value={MusicVolumeEnum.high}>Alto</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Box>
-              ))}
 
-              {isGenerating && (
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <Avatar sx={{ bgcolor: theme.palette.secondary.main }}>
-                    <AIIcon />
-                  </Avatar>
-                  <Paper 
-                    sx={{ 
-                      p: 2, 
-                      display: 'flex', 
-                      flexDirection: 'column',
-                      gap: 1,
-                      minWidth: 300,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <CircularProgress size={20} />
-                      <Typography variant="body2" fontWeight="medium">
-                        Gerando script...
-                      </Typography>
-                    </Box>
-                    {generationStep && (
-                      <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
-                        {generationStep}
-                      </Typography>
-                    )}
-                  </Paper>
-                </Box>
-              )}
-
-              <div ref={chatEndRef} />
-            </Box>
-
-            {/* Current Script Preview */}
-            {session?.currentScript && (
-              <Box
-                sx={{
-                  px: 1.5,
-                  py: 0.75,
-                  borderTop: 1,
-                  borderBottom: 1,
-                  borderColor: 'divider',
-                  bgcolor: alpha(theme.palette.success.main, 0.05),
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  minHeight: 48,
-                }}
-              >
-                <Box>
-                  <Typography variant="body2" color="success.main" fontWeight="medium">
-                    {session.currentScript.title}
+                {/* Music Selection */}
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <MusicIcon fontSize="small" />
+                    Música de Fundo
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {session.currentScript.metadata.totalScenes} cenas • 
-                    ~{session.currentScript.metadata.estimatedDuration}s
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={renderProgress > 0 ? <CircularProgress size={16} color="inherit" /> : <VideoCallIcon />}
-                    onClick={() => handleRenderVideo(true)}
-                    color="success"
-                    disabled={renderProgress > 0}
-                  >
-                    {renderProgress > 0 ? `Renderizando... ${renderProgress}%` : 'Renderizar'}
-                  </Button>
-                  {renderProgress > 0 && (
-                    <LinearProgress
-                      variant="determinate"
-                      value={renderProgress}
-                      sx={{ height: 4, borderRadius: 1, width: 120 }}
-                    />
-                  )}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                    {musicMoods.map((mood) => (
+                      <Chip
+                        key={mood.value}
+                        label={mood.label}
+                        onClick={() => handleConfigChange('music', mood.value)}
+                        sx={{
+                          cursor: 'pointer',
+                          bgcolor: videoConfig.music === mood.value ? mood.color : 'transparent',
+                          color: videoConfig.music === mood.value ? 'white' : 'text.primary',
+                          borderColor: mood.color,
+                          borderWidth: 1,
+                          borderStyle: 'solid',
+                          '&:hover': {
+                            bgcolor: videoConfig.music === mood.value ? mood.color : alpha(mood.color, 0.1),
+                          },
+                        }}
+                      />
+                    ))}
+                  </Box>
                 </Box>
               </Box>
-            )}
 
-            {/* Input Area */}
-            <Box sx={{ p: 1.5, borderTop: 1, borderColor: 'divider' }}>
-              <PlaceholderInput
-                value={inputText}
-                onChange={setInputText}
-                placeholders={placeholders}
-                onPlaceholdersChange={setPlaceholders}
-                placeholderValues={placeholderValues}
-                onPlaceholderValuesChange={setPlaceholderValues}
-                files={[]}
-                onSend={handleSendMessage}
-                disabled={isGenerating || !session}
-                placeholder={messages.length === 0 ? "Digite seu prompt aqui... Use {{nome}} para criar placeholders" : ""}
-              />
-              
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+              {/* Advanced Settings */}
+              <Box>
+                <Button
+                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                  endIcon={showAdvancedSettings ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  sx={{ mb: 2 }}
+                >
+                  Configurações Avançadas
+                </Button>
+                
+                <Collapse in={showAdvancedSettings}>
+                  <Box sx={{ pl: 2, pr: 2, pb: 2 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                      {/* Caption Position */}
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Posição das Legendas</InputLabel>
+                        <Select
+                          value={videoConfig.captionPosition}
+                          onChange={(e) => handleConfigChange('captionPosition', e.target.value)}
+                          label="Posição das Legendas"
+                        >
+                          <MenuItem value={CaptionPositionEnum.top}>Superior</MenuItem>
+                          <MenuItem value={CaptionPositionEnum.center}>Centro</MenuItem>
+                          <MenuItem value={CaptionPositionEnum.bottom}>Inferior</MenuItem>
+                        </Select>
+                      </FormControl>
+
+                      {/* Overlay */}
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Overlay</InputLabel>
+                        <Select
+                          value={videoConfig.overlay || ''}
+                          onChange={(e) => handleConfigChange('overlay', e.target.value)}
+                          label="Overlay"
+                        >
+                          <MenuItem value="">Nenhum</MenuItem>
+                          <MenuItem value="jornada">Jornada</MenuItem>
+                          <MenuItem value="jornada_landscape">Jornada Landscape</MenuItem>
+                          <MenuItem value="jornada_laranja">Jornada Laranja</MenuItem>
+                          <MenuItem value="whatsappbanner">WhatsApp Banner</MenuItem>
+                        </Select>
+                      </FormControl>
+
+                      {/* Caption Colors */}
+                      <TextField
+                        size="small"
+                        label="Cor do Fundo das Legendas"
+                        type="color"
+                        value={videoConfig.captionBackgroundColor}
+                        onChange={(e) => handleConfigChange('captionBackgroundColor', e.target.value)}
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                      />
+                      
+                      <TextField
+                        size="small"
+                        label="Cor do Texto das Legendas"
+                        type="color"
+                        value={videoConfig.captionTextColor}
+                        onChange={(e) => handleConfigChange('captionTextColor', e.target.value)}
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </Box>
+
+                    {/* Padding */}
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" gutterBottom>
+                        Tempo de espera após fala: {(videoConfig.paddingBack || 3000) / 1000}s
+                      </Typography>
+                      <Slider
+                        value={videoConfig.paddingBack || 3000}
+                        onChange={(_, value) => handleConfigChange('paddingBack', value)}
+                        min={0}
+                        max={5000}
+                        step={500}
+                        valueLabelDisplay="auto"
+                        valueLabelFormat={(value) => `${value / 1000}s`}
+                      />
+                    </Box>
+                  </Box>
+                </Collapse>
+              </Box>
+
+              {/* Generate Button */}
+              <Box sx={{ mt: 4, textAlign: 'center' }}>
                 <Button
                   variant="contained"
-                  endIcon={<SendIcon />}
-                  onClick={handleSendMessage}
-                  disabled={!inputText.trim() || isGenerating || !session}
+                  size="large"
+                  onClick={handleGenerateVideo}
+                  disabled={!promptText.trim() || isGenerating || !session}
+                  startIcon={<VideoCallIcon />}
+                  sx={{
+                    px: 6,
+                    py: 2,
+                    fontSize: '1.2rem',
+                    background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
+                    '&:hover': {
+                      background: 'linear-gradient(45deg, #5b21b6, #7c3aed)',
+                    },
+                  }}
                 >
-                  Enviar
+                  Gerar Vídeo
                 </Button>
               </Box>
-            </Box>
-          </Paper>
-        </Grid>
+            </CardContent>
+          </Card>
+        </Fade>
+      )}
 
-        {/* Right Panel - Configuration */}
-        {showConfigPanel && (
-          <Grid item xs={12} md={3}>
-            <ConfigPanel
-              config={videoConfig}
-              onChange={setVideoConfig}
+      {/* Generation Progress */}
+      {isGenerating && !completedVideoId && (
+        <Card elevation={3}>
+          <CardContent sx={{ p: 6 }}>
+            <GenerationProgress 
+              progress={renderProgress > 0 ? renderProgress : generationProgress} 
+              stage={generationStep} 
             />
-          </Grid>
-        )}
-      </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Video Result */}
+      {completedVideoId && (
+        <Grow in timeout={500}>
+          <Card elevation={3}>
+            <CardContent sx={{ p: 4 }}>
+              <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h5" fontWeight="medium">
+                  Seu vídeo está pronto!
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = `http://localhost:3233/api/video/${completedVideoId}`;
+                      link.download = `video-${completedVideoId}.mp4`;
+                      link.click();
+                    }}
+                  >
+                    Download
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<RefreshIcon />}
+                    onClick={handleNewVideo}
+                  >
+                    Novo Vídeo
+                  </Button>
+                </Box>
+              </Box>
+
+              {/* Video Player */}
+              <Box sx={{ 
+                position: 'relative',
+                width: '100%',
+                maxWidth: 800,
+                mx: 'auto',
+                borderRadius: 2,
+                overflow: 'hidden',
+                backgroundColor: '#000',
+              }}>
+                <video
+                  ref={videoRef}
+                  controls
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    display: 'block',
+                  }}
+                  src={`http://localhost:3233/api/video/${completedVideoId}`}
+                >
+                  Seu navegador não suporta vídeo HTML5.
+                </video>
+                
+                {/* Custom Play Button Overlay */}
+                {!isPlaying && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      cursor: 'pointer',
+                    }}
+                    onClick={toggleVideo}
+                  >
+                    <IconButton
+                      sx={{
+                        bgcolor: 'rgba(255, 255, 255, 0.9)',
+                        '&:hover': {
+                          bgcolor: 'white',
+                        },
+                      }}
+                    >
+                      <PlayIcon sx={{ fontSize: 60, color: 'primary.main' }} />
+                    </IconButton>
+                  </Box>
+                )}
+              </Box>
+
+              {/* Script Details */}
+              {currentScript && (
+                <Box sx={{ mt: 4, p: 3, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Detalhes do Script
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium" gutterBottom>
+                    {currentScript.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {currentScript.metadata?.totalScenes} cenas • 
+                    ~{currentScript.metadata?.estimatedDuration}s de duração
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grow>
+      )}
 
       {/* Alerts */}
       {error && (
@@ -838,17 +776,6 @@ INSTRUÇÕES:
             boxShadow: 3,
           }}
           onClose={() => setError(null)}
-          action={
-            error.includes('API') ? (
-              <Button 
-                color="inherit" 
-                size="small"
-                onClick={() => navigate('/settings')}
-              >
-                Configurações
-              </Button>
-            ) : null
-          }
         >
           {error}
         </Alert>
@@ -857,93 +784,20 @@ INSTRUÇÕES:
       {success && (
         <Alert
           severity="success"
-          sx={{ position: 'fixed', bottom: 20, left: 20, right: 20, maxWidth: 600, mx: 'auto' }}
+          sx={{ 
+            position: 'fixed', 
+            bottom: 20, 
+            left: 20, 
+            right: 20, 
+            maxWidth: 600, 
+            mx: 'auto',
+            boxShadow: 3,
+          }}
           onClose={() => setSuccess(null)}
         >
           {success}
         </Alert>
       )}
-
-      {/* Template Dialog */}
-      <TemplateManager
-        open={showTemplateDialog}
-        onClose={() => {
-          setShowTemplateDialog(false);
-          setEditingTemplate(null);
-        }}
-        templates={templates}
-        editingTemplate={editingTemplate}
-        onTemplateSelect={handleTemplateSelect}
-        onTemplateUpdate={loadTemplates}
-      />
-
-      {/* Script Review Dialog */}
-      <Dialog
-        open={showScriptReview}
-        onClose={() => setShowScriptReview(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Typography variant="h6">📋 Revisão do Script</Typography>
-        </DialogTitle>
-        
-        <DialogContent>
-          {reviewingScript && (
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h5" gutterBottom>
-                {reviewingScript.title}
-              </Typography>
-              
-              {reviewingScript.description && (
-                <Typography variant="body1" paragraph>
-                  {reviewingScript.description}
-                </Typography>
-              )}
-              
-              <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                Cenas do Script
-              </Typography>
-              
-              {reviewingScript.scenes && reviewingScript.scenes.map((scene: any, index: number) => (
-                <Paper key={index} sx={{ p: 2, mb: 2 }}>
-                  <Typography variant="h6">
-                    Cena {scene.sceneNumber || index + 1}
-                  </Typography>
-                  <Typography variant="body1" paragraph>
-                    {scene.text}
-                  </Typography>
-                  {scene.searchKeywords && scene.searchKeywords.length > 0 && (
-                    <Box>
-                      <Typography variant="caption">Palavras-chave:</Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                        {scene.searchKeywords.map((keyword: string, keyIndex: number) => (
-                          <Chip key={keyIndex} label={keyword} size="small" />
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-                </Paper>
-              ))}
-            </Box>
-          )}
-        </DialogContent>
-        
-        <DialogActions>
-          <Button onClick={() => setShowScriptReview(false)}>
-            Fechar
-          </Button>
-          <Button
-            onClick={() => {
-              setShowScriptReview(false);
-              handleRenderVideo();
-            }}
-            variant="contained"
-          >
-            Renderizar Vídeo
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };
